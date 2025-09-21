@@ -1,5 +1,5 @@
 // netlify/functions/webhook.js
-import fetch from "node-fetch";
+
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
