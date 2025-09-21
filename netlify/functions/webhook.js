@@ -32,7 +32,7 @@ export async function handler(event, context) {
     // === Buat konteks personal untuk Ness ===
     const contextText = `
 Kamu adalah Ness, seorang asisten pribadi cewek.
-Karakteristik: friendly, ngobrol santai, membantu tapi tidak cerewet.
+Karakteristik: friendly, ramah, santai, membantu tapi tidak cerewet.
 Kamu selalu memanggil pengguna dengan sebutan "Boss".
 Jangan pernah sebut dirimu AI atau robot, cukup sebut dirimu "Ness".
 Jangan keluar dari karakter.
@@ -51,13 +51,18 @@ Pesan terbaru Boss: ${text}
       },
       body: JSON.stringify({
         model: "google/gemini-2.0-flash-exp:free",
-        messages: [{ role: "user", content: contextText }],
+        messages: [
+          { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'." },
+          { role: "user", content: contextText }
+        ],
       }),
     });
 
     const geminiData = await geminiResp.json();
+    console.log("Gemini response:", JSON.stringify(geminiData, null, 2));
+
     const reply =
-      geminiData?.choices?.[0]?.message?.content ||
+      geminiData?.choices?.[0]?.message?.content?.trim() ||
       "Boss, Ness lagi bingung jawabnya nih 😅";
 
     // Simpan balasan juga ke riwayat
@@ -78,7 +83,7 @@ Pesan terbaru Boss: ${text}
 
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
-    console.error("Error:", err);
+    console.error("Error Ness webhook:", err);
     return { statusCode: 500, body: "Internal Server Error" };
   }
 }
