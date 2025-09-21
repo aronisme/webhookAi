@@ -1,9 +1,8 @@
+
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-
-// === Memori sederhana per user ===
-const userMemory = {}; // { chatId: [riwayat pesan] }
 
 export async function handler(event, context) {
   try {
@@ -18,26 +17,7 @@ export async function handler(event, context) {
     }
 
     const chatId = message.chat.id;
-    const userName = message.from?.first_name || "User";
     const text = message.text || "";
-
-    // === Simpan riwayat singkat (max 5 pesan terakhir) ===
-    if (!userMemory[chatId]) {
-      userMemory[chatId] = [];
-    }
-    userMemory[chatId].push(`User: ${text}`);
-    if (userMemory[chatId].length > 5) {
-      userMemory[chatId].shift(); // buang pesan lama
-    }
-
-    // === Buat konteks personal untuk Gemini ===
-    const contextText = `
-Kamu adalah asisten pribadi yang ramah. 
-Nama user: ${userName}.
-Riwayat percakapan terakhir:
-${userMemory[chatId].join("\n")}
-Pesan terbaru user: ${text}
-`;
 
     // === Panggil Gemini API ===
     const geminiResp = await fetch(
@@ -47,7 +27,7 @@ Pesan terbaru user: ${text}
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: contextText }] }],
+          contents: [{ parts: [{ text }] }],
         }),
       }
     );
@@ -56,12 +36,6 @@ Pesan terbaru user: ${text}
     const reply =
       geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Maaf, AI tidak memberikan jawaban.";
-
-    // Simpan balasan juga ke riwayat
-    userMemory[chatId].push(`AI: ${reply}`);
-    if (userMemory[chatId].length > 5) {
-      userMemory[chatId].shift();
-    }
 
     // === Balas ke Telegram ===
     await fetch(`${TELEGRAM_API}/sendMessage`, {
