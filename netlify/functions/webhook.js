@@ -1,6 +1,3 @@
-// webhook.js
-// Netlify Function: Telegram ⇄ Ness ⇄ GAS (single-sheet)cs
-
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const GAS_URL = process.env.GAS_URL; // wajib di-set ke WebApp GAS lo
@@ -29,7 +26,8 @@ const models = [
 ];
 
 // ===== In-memory chat crumbs =====
-const userMemory = {}; // { chatId: [ "Boss: ...", "Ness: ..." ] }
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
+const userMemory = {}; // { chatId: [{ text: "Boss: ...", timestamp: number }, { text: "Ness: ...", timestamp: number }] }
 
 // ===== Fallback replies =====
 const fallbackReplies = [
@@ -101,6 +99,16 @@ async function callGAS(payload) {
   return json;
 }
 
+// Summarize older messages to reduce context size
+function summarizeContext(history) {
+  if (history.length <= MEMORY_LIMIT / 2) return history;
+  const summary = history.slice(0, Math.floor(MEMORY_LIMIT / 4)).map(msg => ({
+    text: msg.text.slice(0, 50) + "...",
+    timestamp: msg.timestamp,
+  }));
+  return [...summary, ...history.slice(-Math.floor(MEMORY_LIMIT / 2))];
+}
+
 // ===== Main handler =====
 export async function handler(event) {
   try {
@@ -121,6 +129,12 @@ export async function handler(event) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
     const lower = text.toLowerCase();
+
+    // Validate message size
+    if (text.length > 1000) {
+      await sendMessage(chatId, "Boss, pesan terlalu panjang! Coba pendekin ya 😅");
+      return { statusCode: 200, body: "message too long" };
+    }
 
     await typing(chatId);
 
@@ -202,11 +216,19 @@ export async function handler(event) {
       return { statusCode: 200, body: "list schedule route" };
     }
 
+    // 5) HAPUS MEMORI
+    if (lower === "hapus memori") {
+      delete userMemory[chatId];
+      await sendMessage(chatId, "Boss, memori Ness sudah dihapus! ✨");
+      return { statusCode: 200, body: "clear memory route" };
+    }
+
     // ===== ELSE → AI CHAT =====
 
     if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push(`Boss: ${text || "[kirim gambar]"}`);
-    if (userMemory[chatId].length > 5) userMemory[chatId].shift();
+    userMemory[chatId].push({ text: `Boss: ${text || "[kirim gambar]"}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    if (userMemory[chatId].length > MEMORY_LIMIT) userMemory[chatId].shift();
 
     const contextText = `
 Kamu adalah Ness, seorang asisten pribadi cewek.
@@ -216,7 +238,7 @@ Jangan pernah sebut dirimu AI atau robot, cukup sebut dirimu "Ness".
 Jangan keluar dari karakter.
 
 Riwayat percakapan terakhir:
-${userMemory[chatId].join("\n")}
+${userMemory[chatId].map(m => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`).join("\n")}
 Pesan terbaru Boss: ${text || "[gambar]"}
     `.trim();
 
@@ -260,8 +282,9 @@ Pesan terbaru Boss: ${text || "[gambar]"}
       }
     }
 
-    userMemory[chatId].push(`Ness: ${reply}`);
-    if (userMemory[chatId].length > 5) userMemory[chatId].shift();
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    if (userMemory[chatId].length > MEMORY_LIMIT) userMemory[chatId].shift();
 
     await sendMessage(chatId, reply);
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
