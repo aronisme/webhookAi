@@ -19,7 +19,7 @@ async function callGemini(cmd) {
           },
           {
             role: "user",
-            content: `Buat pesan singkat untuk "${cmd}". Jangan formal, gaya ngobrol santai + emoji.`,
+            content: `Sebagai asisten lakukan tugas "${cmd}". Jangan formal, gaya ngobrol santai + emoji.`,
           },
         ],
       }),
