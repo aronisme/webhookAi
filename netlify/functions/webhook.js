@@ -2,7 +2,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const GAS_URL = process.env.GAS_URL; // URL WebApp GAS
 
-// === Ambil API keys satu per satu dari environment ===
+// === API Keys OpenRouter ===
 const apiKeys = [
   process.env.OPENROUTER_KEY1,
   process.env.OPENROUTER_KEY2,
@@ -15,7 +15,7 @@ const apiKeys = [
 
 let keyIndex = 0; // round-robin antar key
 
-// === Daftar model fallback ===
+// === Model fallback ===
 const models = [
   "google/gemini-2.0-flash-exp:free",
   "x-ai/grok-4-fast:free",
@@ -26,10 +26,10 @@ const models = [
   "mistralai/mistral-small-3.2-24b-instruct:free",
 ];
 
-// === Memori sederhana per user ===
+// === Memori per user ===
 const userMemory = {}; // { chatId: [riwayat pesan] }
 
-// === Template fallback kalau semua model gagal ===
+// === Fallback replies ===
 const fallbackReplies = [
   "Boss, Ness lagi error mikir nih 😅",
   "Sepertinya server lagi ngambek 🤖💤",
@@ -37,7 +37,7 @@ const fallbackReplies = [
   "Ness bingung, tapi Ness tetap standby buat Boss 😉",
 ];
 
-export async function handler(event, context) {
+export async function handler(event) {
   try {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: "Method Not Allowed" };
@@ -50,85 +50,67 @@ export async function handler(event, context) {
     }
 
     const chatId = message.chat.id;
-    const text = message.text || "";
+    const text = (message.text || "").trim();
+    const lower = text.toLowerCase();
 
-    // === Cek apakah ada gambar ===
-    let imageUrl = null;
-    if (message.photo && message.photo.length > 0) {
-      const fileId = message.photo[message.photo.length - 1].file_id;
-      const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
-      const fileData = await fileResp.json();
-      if (fileData.ok) {
-        imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
-      }
-    }
-
-    // === Kirim aksi typing biar natural ===
+    // === Kirim typing action ===
     await fetch(`${TELEGRAM_API}/sendChatAction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, action: "typing" }),
     });
 
-    // === Cek apakah teks adalah perintah untuk GAS ===
-    if (/^ness\s+catat/i.test(text)) {
+    // === Parser ke GAS ===
+    if (lower.includes("catat")) {
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: "addNote", text }),
       });
       const data = await res.json();
-      const reply = `Boss ✨ ${data.message || "Catatan berhasil disimpan"}`;
-      await sendMessage(chatId, reply);
+      await sendMessage(chatId, `Boss ✨ ${data.message || "Catatan berhasil disimpan"}`);
       return { statusCode: 200, body: "note saved" };
     }
 
-    if (/^ness\s+jadwal/i.test(text)) {
+    if (lower.includes("jadwal")) {
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: "addSchedule", text }),
       });
       const data = await res.json();
-      const reply = `Boss ✨ ${data.message || "Jadwal berhasil disimpan"}`;
-      await sendMessage(chatId, reply);
+      await sendMessage(chatId, `Boss ✨ ${data.message || "Jadwal berhasil disimpan"}`);
       return { statusCode: 200, body: "schedule saved" };
     }
 
-    if (/^ness\s+lihat catatan/i.test(text)) {
+    if (lower.includes("lihat catatan")) {
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: "listNotes" }),
       });
       const data = await res.json();
-      const reply = `Boss ✨ Catatan:\n${data.notes?.join("\n") || "(kosong)"}`;
-      await sendMessage(chatId, reply);
+      await sendMessage(chatId, `Boss ✨ Catatan:\n${data.notes?.join("\n") || "(kosong)"}`);
       return { statusCode: 200, body: "notes listed" };
     }
 
-    if (/^ness\s+lihat jadwal/i.test(text)) {
+    if (lower.includes("lihat jadwal")) {
       const res = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: "listSchedule" }),
       });
       const data = await res.json();
-      const reply = `Boss ✨ Jadwal:\n${data.schedules?.join("\n") || "(kosong)"}`;
-      await sendMessage(chatId, reply);
+      await sendMessage(chatId, `Boss ✨ Jadwal:\n${data.schedules?.join("\n") || "(kosong)"}`);
       return { statusCode: 200, body: "schedules listed" };
     }
 
-    // === Simpan riwayat singkat (max 5 pesan terakhir) ===
-    if (!userMemory[chatId]) {
-      userMemory[chatId] = [];
-    }
-    userMemory[chatId].push(`Boss: ${text || "[kirim gambar]"}`);
-    if (userMemory[chatId].length > 5) {
-      userMemory[chatId].shift();
-    }
+    // === Kalau bukan perintah → jalankan AI ===
+    // Simpan riwayat singkat
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push(`Boss: ${text || "[gambar]"}`);
+    if (userMemory[chatId].length > 5) userMemory[chatId].shift();
 
-    // === Buat konteks personal untuk Ness ===
     const contextText = `
 Kamu adalah Ness, seorang asisten pribadi cewek.
 Karakteristik: friendly, ramah, santai, membantu tapi tidak cerewet.
@@ -141,14 +123,13 @@ ${userMemory[chatId].join("\n")}
 Pesan terbaru Boss: ${text || "[gambar]"}
 `;
 
-    // === Panggil OpenRouter dengan multi-model & multi-key fallback ===
     let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
 
     outerLoop:
     for (const model of models) {
       for (let i = 0; i < apiKeys.length; i++) {
         const apiKey = apiKeys[keyIndex];
-        keyIndex = (keyIndex + 1) % apiKeys.length; // round robin
+        keyIndex = (keyIndex + 1) % apiKeys.length;
 
         try {
           const payload = {
@@ -159,15 +140,7 @@ Pesan terbaru Boss: ${text || "[gambar]"}
                 content:
                   "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
               },
-              {
-                role: "user",
-                content: imageUrl
-                  ? [
-                      { type: "text", text: contextText },
-                      { type: "image_url", image_url: { url: imageUrl } },
-                    ]
-                  : [{ type: "text", text: contextText }],
-              },
+              { role: "user", content: [{ type: "text", text: contextText }] },
             ],
           };
 
@@ -181,11 +154,9 @@ Pesan terbaru Boss: ${text || "[gambar]"}
           });
 
           const data = await resp.json();
-          console.log(`Response from ${model}:`, JSON.stringify(data, null, 2));
-
           if (data?.choices?.[0]?.message?.content) {
             reply = data.choices[0].message.content.trim();
-            break outerLoop; // sukses → keluar dari semua loop
+            break outerLoop;
           }
         } catch (err) {
           console.error(`Error pakai ${model} dengan key ${i + 1}:`, err.message);
@@ -193,15 +164,11 @@ Pesan terbaru Boss: ${text || "[gambar]"}
       }
     }
 
-    // Simpan balasan ke memori
+    // Simpan balasan
     userMemory[chatId].push(`Ness: ${reply}`);
-    if (userMemory[chatId].length > 5) {
-      userMemory[chatId].shift();
-    }
+    if (userMemory[chatId].length > 5) userMemory[chatId].shift();
 
-    // === Balas ke Telegram ===
     await sendMessage(chatId, reply);
-
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
     console.error("Error Ness webhook:", err);
@@ -209,7 +176,7 @@ Pesan terbaru Boss: ${text || "[gambar]"}
   }
 }
 
-// === Helper sendMessage ===
+// === Helper ===
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
