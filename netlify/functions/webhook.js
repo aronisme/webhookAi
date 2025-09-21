@@ -7,6 +7,9 @@ const apiKeys = [
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
   process.env.OPENROUTER_KEY4,
+  process.env.OPENROUTER_KEY5,
+  process.env.OPENROUTER_KEY6,
+  process.env.OPENROUTER_KEY7,
 ].filter(Boolean);
 
 let keyIndex = 0; // round-robin antar key
