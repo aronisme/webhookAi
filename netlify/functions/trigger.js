@@ -1,43 +1,36 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const chatId = "1296836457"; // chat ID Boss Aron
 
-export async function handler(event) {
+exports.handler = async (event) => {
   try {
-    const chatId = "6929677613"; // Chat ID Boss Aron
+    // teks bisa dikirim manual dari GAS (query param) atau default
+    const params = event.queryStringParameters || {};
+    const text = params.text || "Halo Boss Aron, Ness hadir 🚀";
 
-    // Bisa custom pesan lewat query string ?text=...
-    const urlParams = new URLSearchParams(event.queryStringParameters);
-    const text = urlParams.get("text") || "Ness coba bikin inspirasi harian ✨";
-
-    // === Panggil Gemini ===
-    const geminiResp = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" +
-        GEMINI_API_KEY,
+    // kirim ke Telegram
+    const tgRes = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
+          chat_id: chatId,
+          text,
         }),
       }
     );
+    const data = await tgRes.json();
+    console.log("Telegram response:", data);
 
-    const data = await geminiResp.json();
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Boss, Ness belum dapet inspirasi 😅";
-
-    // === Kirim ke Telegram ===
-    await fetch(`${TELEGRAM_API}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: reply }),
-    });
-
-    return { statusCode: 200, body: "Triggered Ness OK" };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ status: "Triggered Ness OK" }),
+    };
   } catch (err) {
     console.error("Trigger error:", err);
-    return { statusCode: 500, body: "Trigger Error" };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Trigger failed" }),
+    };
   }
-}
+};
