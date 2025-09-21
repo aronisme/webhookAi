@@ -1,6 +1,15 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
+// === Ambil API keys satu per satu dari environment ===
+const apiKeys = [
+  process.env.OPENROUTER_KEY1,
+  process.env.OPENROUTER_KEY2,
+  process.env.OPENROUTER_KEY3,
+  process.env.OPENROUTER_KEY4,
+].filter(Boolean); // buang yg undefined
+
+let keyIndex = 0; // round-robin
 
 // === Memori sederhana per user ===
 const userMemory = {}; // { chatId: [riwayat pesan] }
@@ -26,7 +35,7 @@ export async function handler(event, context) {
     }
     userMemory[chatId].push(`Boss Aron: ${text}`);
     if (userMemory[chatId].length > 5) {
-      userMemory[chatId].shift(); // buang pesan lama
+      userMemory[chatId].shift();
     }
 
     // === Buat konteks personal untuk Ness ===
@@ -42,30 +51,47 @@ ${userMemory[chatId].join("\n")}
 Pesan terbaru Boss: ${text}
 `;
 
-    // === Panggil OpenRouter Gemini ===
-    const geminiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.0-flash-exp:free",
-        messages: [
-          { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'." },
-          { role: "user", content: contextText }
-        ],
-      }),
-    });
+    // === Panggil OpenRouter Gemini dengan multi-key fallback ===
+    let reply = "Boss, Ness lagi bingung jawabnya nih 😅";
+    for (let i = 0; i < apiKeys.length; i++) {
+      const apiKey = apiKeys[keyIndex];
+      keyIndex = (keyIndex + 1) % apiKeys.length; // round robin
 
-    const geminiData = await geminiResp.json();
-    console.log("Gemini response:", JSON.stringify(geminiData, null, 2));
+      try {
+        const geminiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.0-flash-exp:free",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
+              },
+              { role: "user", content: contextText },
+            ],
+          }),
+        });
 
-    const reply =
-      geminiData?.choices?.[0]?.message?.content?.trim() ||
-      "Boss, Ness lagi bingung jawabnya nih 😅";
+        const geminiData = await geminiResp.json();
+        console.log("Gemini response:", JSON.stringify(geminiData, null, 2));
 
-    // Simpan balasan juga ke riwayat
+        reply =
+          geminiData?.choices?.[0]?.message?.content?.trim() ||
+          "Boss, Ness lagi kehabisan kata 😅";
+
+        // Berhasil, keluar loop
+        break;
+      } catch (err) {
+        console.error(`Error pakai key ${i + 1}:`, err);
+      }
+    }
+
+    // Simpan balasan ke memori
     userMemory[chatId].push(`Ness: ${reply}`);
     if (userMemory[chatId].length > 5) {
       userMemory[chatId].shift();
