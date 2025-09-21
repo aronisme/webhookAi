@@ -28,6 +28,14 @@ const models = [
 // === Memori sederhana per user ===
 const userMemory = {}; // { chatId: [riwayat pesan] }
 
+// === Template fallback kalau semua model gagal ===
+const fallbackReplies = [
+  "Boss, Ness lagi error mikir nih 😅",
+  "Sepertinya server lagi ngambek 🤖💤",
+  "Boss, coba tanya lagi bentar ya ✨",
+  "Ness bingung, tapi Ness tetap standby buat Boss 😉",
+];
+
 export async function handler(event, context) {
   try {
     if (event.httpMethod !== "POST") {
@@ -59,7 +67,7 @@ export async function handler(event, context) {
     if (!userMemory[chatId]) {
       userMemory[chatId] = [];
     }
-    userMemory[chatId].push(`Boss Aron: ${text || "[kirim gambar]"}`);
+    userMemory[chatId].push(`Boss: ${text || "[kirim gambar]"}`);
     if (userMemory[chatId].length > 5) {
       userMemory[chatId].shift();
     }
@@ -77,8 +85,18 @@ ${userMemory[chatId].join("\n")}
 Pesan terbaru Boss: ${text || "[gambar]"}
 `;
 
+    // === Kirim aksi typing biar natural ===
+    await fetch(`${TELEGRAM_API}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        action: "typing",
+      }),
+    });
+
     // === Panggil OpenRouter dengan multi-model & multi-key fallback ===
-    let reply = "Boss, Ness lagi bingung jawabnya nih 😅";
+    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
 
     outerLoop:
     for (const model of models) {
