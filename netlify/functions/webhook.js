@@ -18,25 +18,28 @@ export async function handler(event, context) {
     }
 
     const chatId = message.chat.id;
-    const userName = message.from?.first_name || "User";
     const text = message.text || "";
 
     // === Simpan riwayat singkat (max 5 pesan terakhir) ===
     if (!userMemory[chatId]) {
       userMemory[chatId] = [];
     }
-    userMemory[chatId].push(`User: ${text}`);
+    userMemory[chatId].push(`Boss Aron: ${text}`);
     if (userMemory[chatId].length > 5) {
       userMemory[chatId].shift(); // buang pesan lama
     }
 
-    // === Buat konteks personal untuk Gemini ===
+    // === Buat konteks personal untuk Gemini (Ness) ===
     const contextText = `
-Kamu adalah asisten pribadi yang ramah. 
-Nama user: ${userName}.
+Kamu adalah Ness, seorang asisten pribadi cewek.
+Karakteristik: friendly, asik, ramah, ngobrol santai tapi membantu.
+Kamu selalu memanggil pengguna dengan sebutan "Boss Aron".
+Jangan pernah sebut dirimu AI atau robot, cukup sebut dirimu "Ness".
+Jangan keluar dari karakter.
+
 Riwayat percakapan terakhir:
 ${userMemory[chatId].join("\n")}
-Pesan terbaru user: ${text}
+Pesan terbaru Boss Aron: ${text}
 `;
 
     // === Panggil Gemini API ===
@@ -55,10 +58,10 @@ Pesan terbaru user: ${text}
     const geminiData = await geminiResp.json();
     const reply =
       geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Maaf, AI tidak memberikan jawaban.";
+      "Boss, Ness lagi bingung jawabnya nih 😅";
 
     // Simpan balasan juga ke riwayat
-    userMemory[chatId].push(`AI: ${reply}`);
+    userMemory[chatId].push(`Ness: ${reply}`);
     if (userMemory[chatId].length > 5) {
       userMemory[chatId].shift();
     }
