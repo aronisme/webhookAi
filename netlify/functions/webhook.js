@@ -1,5 +1,6 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const GAS_URL = process.env.GAS_URL; // URL WebApp GAS
 
 // === Ambil API keys satu per satu dari environment ===
 const apiKeys = [
@@ -54,13 +55,68 @@ export async function handler(event, context) {
     // === Cek apakah ada gambar ===
     let imageUrl = null;
     if (message.photo && message.photo.length > 0) {
-      // ambil resolusi terbesar
       const fileId = message.photo[message.photo.length - 1].file_id;
       const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
       const fileData = await fileResp.json();
       if (fileData.ok) {
         imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
       }
+    }
+
+    // === Kirim aksi typing biar natural ===
+    await fetch(`${TELEGRAM_API}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    });
+
+    // === Cek apakah teks adalah perintah untuk GAS ===
+    if (/^ness\s+catat/i.test(text)) {
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "addNote", text }),
+      });
+      const data = await res.json();
+      const reply = `Boss ✨ ${data.message || "Catatan berhasil disimpan"}`;
+      await sendMessage(chatId, reply);
+      return { statusCode: 200, body: "note saved" };
+    }
+
+    if (/^ness\s+jadwal/i.test(text)) {
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "addSchedule", text }),
+      });
+      const data = await res.json();
+      const reply = `Boss ✨ ${data.message || "Jadwal berhasil disimpan"}`;
+      await sendMessage(chatId, reply);
+      return { statusCode: 200, body: "schedule saved" };
+    }
+
+    if (/^ness\s+lihat catatan/i.test(text)) {
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "listNotes" }),
+      });
+      const data = await res.json();
+      const reply = `Boss ✨ Catatan:\n${data.notes?.join("\n") || "(kosong)"}`;
+      await sendMessage(chatId, reply);
+      return { statusCode: 200, body: "notes listed" };
+    }
+
+    if (/^ness\s+lihat jadwal/i.test(text)) {
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "listSchedule" }),
+      });
+      const data = await res.json();
+      const reply = `Boss ✨ Jadwal:\n${data.schedules?.join("\n") || "(kosong)"}`;
+      await sendMessage(chatId, reply);
+      return { statusCode: 200, body: "schedules listed" };
     }
 
     // === Simpan riwayat singkat (max 5 pesan terakhir) ===
@@ -84,16 +140,6 @@ Riwayat percakapan terakhir:
 ${userMemory[chatId].join("\n")}
 Pesan terbaru Boss: ${text || "[gambar]"}
 `;
-
-    // === Kirim aksi typing biar natural ===
-    await fetch(`${TELEGRAM_API}/sendChatAction`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        action: "typing",
-      }),
-    });
 
     // === Panggil OpenRouter dengan multi-model & multi-key fallback ===
     let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
@@ -154,18 +200,20 @@ Pesan terbaru Boss: ${text || "[gambar]"}
     }
 
     // === Balas ke Telegram ===
-    await fetch(`${TELEGRAM_API}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: reply,
-      }),
-    });
+    await sendMessage(chatId, reply);
 
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
     console.error("Error Ness webhook:", err);
     return { statusCode: 500, body: "Internal Server Error" };
   }
+}
+
+// === Helper sendMessage ===
+async function sendMessage(chatId, text) {
+  await fetch(`${TELEGRAM_API}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
 }
