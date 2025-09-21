@@ -7,7 +7,7 @@ const apiKeys = [
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
   process.env.OPENROUTER_KEY4,
-].filter(Boolean); // buang yg undefined
+].filter(Boolean);
 
 let keyIndex = 0; // round-robin antar key
 
@@ -40,11 +40,23 @@ export async function handler(event, context) {
     const chatId = message.chat.id;
     const text = message.text || "";
 
+    // === Cek apakah ada gambar ===
+    let imageUrl = null;
+    if (message.photo && message.photo.length > 0) {
+      // ambil resolusi terbesar
+      const fileId = message.photo[message.photo.length - 1].file_id;
+      const fileResp = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+      const fileData = await fileResp.json();
+      if (fileData.ok) {
+        imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`;
+      }
+    }
+
     // === Simpan riwayat singkat (max 5 pesan terakhir) ===
     if (!userMemory[chatId]) {
       userMemory[chatId] = [];
     }
-    userMemory[chatId].push(`Boss Aron: ${text}`);
+    userMemory[chatId].push(`Boss Aron: ${text || "[kirim gambar]"}`);
     if (userMemory[chatId].length > 5) {
       userMemory[chatId].shift();
     }
@@ -59,7 +71,7 @@ Jangan keluar dari karakter.
 
 Riwayat percakapan terakhir:
 ${userMemory[chatId].join("\n")}
-Pesan terbaru Boss: ${text}
+Pesan terbaru Boss: ${text || "[gambar]"}
 `;
 
     // === Panggil OpenRouter dengan multi-model & multi-key fallback ===
@@ -72,23 +84,33 @@ Pesan terbaru Boss: ${text}
         keyIndex = (keyIndex + 1) % apiKeys.length; // round robin
 
         try {
+          const payload = {
+            model,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
+              },
+              {
+                role: "user",
+                content: imageUrl
+                  ? [
+                      { type: "text", text: contextText },
+                      { type: "image_url", image_url: { url: imageUrl } },
+                    ]
+                  : [{ type: "text", text: contextText }],
+              },
+            ],
+          };
+
           const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({
-              model,
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
-                },
-                { role: "user", content: contextText },
-              ],
-            }),
+            body: JSON.stringify(payload),
           });
 
           const data = await resp.json();
