@@ -25,6 +25,14 @@ const models = [
   "mistralai/mistral-small-3.2-24b-instruct:free",
 ];
 
+// === Template fallback random kalau semua gagal ===
+const fallbackReplies = [
+  "Boss ✨ Ness hadir 🚀",
+  "Boss, Ness standby selalu 😎",
+  "Ness online terus buat Boss 💖",
+  "Boss, Ness siap jalan 💡",
+];
+
 async function callAI(cmd) {
   let lastError = null;
 
@@ -51,7 +59,7 @@ async function callAI(cmd) {
 Selalu panggil user dengan sebutan "Boss".
 Gaya ramah, santai, penuh emoji.
 Tugasmu sekarang: buat pesan singkat untuk perintah ini: "${cmd}".
-Hasilkan teks siap kirim ke Boss, tanpa embel-embel tambahan.`
+Hasilkan teks siap kirim ke Boss, tanpa embel-embel tambahan.`,
               },
             ],
           }),
@@ -72,8 +80,9 @@ Hasilkan teks siap kirim ke Boss, tanpa embel-embel tambahan.`
     }
   }
 
-  // Semua model gagal
-  return `Boss ✨ Ness hadir 🚀 (AI error: ${lastError?.message || "all models failed"})`;
+  // Semua model gagal → pakai fallback random
+  return fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)] +
+    ` (AI error: ${lastError?.message || "all models failed"})`;
 }
 
 exports.handler = async (event) => {
@@ -83,6 +92,17 @@ exports.handler = async (event) => {
 
     const text = await callAI(cmd);
 
+    // === Kirim aksi typing biar natural ===
+    await fetch(`${TELEGRAM_API}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    });
+
+    // === Delay 1-2 detik biar kesannya lagi ngetik ===
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // === Kirim balasan ke Telegram ===
     const tgRes = await fetch(`${TELEGRAM_API}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
