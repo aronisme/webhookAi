@@ -15,12 +15,13 @@ async function callGemini(cmd) {
         messages: [
           {
             role: "system",
-            content: "Kamu Ness, asisten pribadi cewek, friendly, ramah, santai. Selalu manggil user dengan sebutan 'Boss'.",
-          },
-          {
-            role: "user",
-            content: `Sebagai asisten lakukan tugas "${cmd}". Jangan formal, gaya ngobrol santai + emoji.`,
-          },
+            content: `Kamu adalah Ness, asisten pribadi cewek. 
+Selalu panggil user dengan sebutan "Boss".
+Gaya ramah, santai, penuh emoji.
+Tugasmu sekarang: buat pesan singkat untuk perintah ini: "${cmd}".
+Hasilkan teks siap kirim ke Boss, tanpa embel-embel "ini pesan sesuai perintah" atau "oke Boss". 
+Langsung keluarkan teks finalnya.`,
+          }
         ],
       }),
     });
