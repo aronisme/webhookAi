@@ -9,7 +9,18 @@ const apiKeys = [
   process.env.OPENROUTER_KEY4,
 ].filter(Boolean); // buang yg undefined
 
-let keyIndex = 0; // round-robin
+let keyIndex = 0; // round-robin antar key
+
+// === Daftar model fallback ===
+const models = [
+  "google/gemini-2.0-flash-exp:free",
+  "x-ai/grok-4-fast:free",
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "meta-llama/llama-4-maverick:free",
+  "meta-llama/llama-4-scout:free",
+  "moonshotai/kimi-vl-a3b-thinking:free",
+  "mistralai/mistral-small-3.2-24b-instruct:free",
+];
 
 // === Memori sederhana per user ===
 const userMemory = {}; // { chatId: [riwayat pesan] }
@@ -51,43 +62,45 @@ ${userMemory[chatId].join("\n")}
 Pesan terbaru Boss: ${text}
 `;
 
-    // === Panggil OpenRouter Gemini dengan multi-key fallback ===
+    // === Panggil OpenRouter dengan multi-model & multi-key fallback ===
     let reply = "Boss, Ness lagi bingung jawabnya nih 😅";
-    for (let i = 0; i < apiKeys.length; i++) {
-      const apiKey = apiKeys[keyIndex];
-      keyIndex = (keyIndex + 1) % apiKeys.length; // round robin
 
-      try {
-        const geminiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.0-flash-exp:free",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
-              },
-              { role: "user", content: contextText },
-            ],
-          }),
-        });
+    outerLoop:
+    for (const model of models) {
+      for (let i = 0; i < apiKeys.length; i++) {
+        const apiKey = apiKeys[keyIndex];
+        keyIndex = (keyIndex + 1) % apiKeys.length; // round robin
 
-        const geminiData = await geminiResp.json();
-        console.log("Gemini response:", JSON.stringify(geminiData, null, 2));
+        try {
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "Kamu adalah Ness, asisten pribadi cewek yang selalu manggil user dengan sebutan 'Boss'.",
+                },
+                { role: "user", content: contextText },
+              ],
+            }),
+          });
 
-        reply =
-          geminiData?.choices?.[0]?.message?.content?.trim() ||
-          "Boss, Ness lagi kehabisan kata 😅";
+          const data = await resp.json();
+          console.log(`Response from ${model}:`, JSON.stringify(data, null, 2));
 
-        // Berhasil, keluar loop
-        break;
-      } catch (err) {
-        console.error(`Error pakai key ${i + 1}:`, err);
+          if (data?.choices?.[0]?.message?.content) {
+            reply = data.choices[0].message.content.trim();
+            break outerLoop; // sukses → keluar dari semua loop
+          }
+        } catch (err) {
+          console.error(`Error pakai ${model} dengan key ${i + 1}:`, err.message);
+        }
       }
     }
 
