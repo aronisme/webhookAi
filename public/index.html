@@ -5,33 +5,22 @@
   <title>Ness Test Panel</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-    select, button { padding: 8px; margin-top: 10px; font-size: 16px; }
-    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; }
+    button { padding: 10px 16px; font-size: 16px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; margin-top: 20px; white-space: pre-wrap; }
   </style>
 </head>
 <body>
-  <h1>🚀 Ness Test Panel</h1>
-  <label for="modeSelect">Pilih Mode:</label>
-  <select id="modeSelect">
-    <option value="addnote">Tambah Catatan</option>
-    <option value="listnotes">Lihat Catatan</option>
-    <option value="addschedule">Tambah Jadwal</option>
-    <option value="listschedule">Lihat Jadwal</option>
-    <option value="completeschedule">Selesaikan Jadwal</option>
-  </select>
-  <br>
-  <button onclick="runTest()">Jalankan Test</button>
+  <h1>🚀 Test Koneksi ke GAS</h1>
+  <button onclick="runTest()">Tes Koneksi</button>
 
   <h2>Hasil:</h2>
   <pre id="output">Belum ada hasil.</pre>
 
   <script>
     async function runTest() {
-      const mode = document.getElementById("modeSelect").value;
-      document.getElementById("output").textContent = "Mengirim request ke /test?mode=" + mode + "...";
-
+      document.getElementById("output").textContent = "Mengirim request ke /test ...";
       try {
-        const res = await fetch("/test?mode=" + mode);
+        const res = await fetch("/test");
         const data = await res.json();
         document.getElementById("output").textContent = JSON.stringify(data, null, 2);
       } catch (err) {
