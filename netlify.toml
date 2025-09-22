@@ -1,2 +1,6 @@
+[build]
+  publish = "public"          # folder static files (index.html, css, js)
+  functions = "netlify/functions"
+
 [functions]
   directory = "netlify/functions"
