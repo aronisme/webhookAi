@@ -5,12 +5,14 @@
   <title>Ness Test Panel</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-    select, button { padding: 8px; margin-top: 10px; font-size: 16px; }
+    select, button, input { padding: 8px; margin-top: 10px; font-size: 16px; }
+    input { width: 100%; box-sizing: border-box; }
     pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <h1>🚀 Ness Test Panel</h1>
+
   <label for="modeSelect">Pilih Mode:</label>
   <select id="modeSelect">
     <option value="ping">🔌 Tes Koneksi</option>
@@ -20,6 +22,11 @@
     <option value="listschedule">Lihat Jadwal</option>
     <option value="completeschedule">Selesaikan Jadwal</option>
   </select>
+
+  <br>
+  <label for="customText">Teks / ID (opsional):</label>
+  <input id="customText" placeholder="Isi catatan, jadwal (event | waktu), atau ID schedule...">
+
   <br>
   <button onclick="runTest()">Jalankan Test</button>
 
@@ -29,11 +36,13 @@
   <script>
     async function runTest() {
       const mode = document.getElementById("modeSelect").value;
+      const text = document.getElementById("customText").value;
+
       document.getElementById("output").textContent =
         "Mengirim request ke /test?mode=" + mode + "...";
 
       try {
-        const res = await fetch("/test?mode=" + mode);
+        const res = await fetch("/test?mode=" + mode + "&text=" + encodeURIComponent(text));
         const data = await res.json();
         document.getElementById("output").textContent =
           JSON.stringify(data, null, 2);
