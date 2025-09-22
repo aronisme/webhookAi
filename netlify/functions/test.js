@@ -1,13 +1,9 @@
-export async function handler(event, context) {
+export async function handler() {
   try {
-    const GAS_URL = process.env.GAS_URL; // pastikan ada di env Netlify
-    const payload = {
-      type: "test",
-      note: "Coba simpan catatan dari halaman utama",
-      schedule: "Besok jam 9 meeting",
-    };
+    const GAS_URL = process.env.GAS_URL;
 
-    // relay ke GAS
+    const payload = { command: "catat", text: "Coba simpan catatan dari halaman utama" };
+
     const response = await fetch(GAS_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -28,11 +24,7 @@ export async function handler(event, context) {
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        status: "error",
-        message: err.message,
-        stack: err.stack,
-      }),
+      body: JSON.stringify({ status: "error", message: err.message }),
     };
   }
 }
