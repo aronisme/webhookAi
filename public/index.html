@@ -2,20 +2,23 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Ness Test Panel</title>
+  <title>Ness GAS Test Panel</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; }
     select, button, input { padding: 8px; margin-top: 10px; font-size: 16px; }
-    input { width: 100%; box-sizing: border-box; }
+    input, select { width: 100%; box-sizing: border-box; }
+    button { background: #007bff; color: #fff; border: none; cursor: pointer; }
+    button:hover { background: #0056b3; }
     pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; }
+    label { margin-top: 15px; display: block; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>🚀 Ness Test Panel</h1>
+  <h1>🚀 Ness GAS Test Panel</h1>
 
-  <label for="modeSelect">Pilih Mode:</label>
+  <label for="modeSelect">Pilih Command:</label>
   <select id="modeSelect">
-    <option value="ping">🔌 Tes Koneksi</option>
+    <option value="ping">🔌 Ping (tes koneksi)</option>
     <option value="addnote">Tambah Catatan</option>
     <option value="listnotes">Lihat Catatan</option>
     <option value="addschedule">Tambah Jadwal</option>
@@ -23,12 +26,10 @@
     <option value="completeschedule">Selesaikan Jadwal</option>
   </select>
 
-  <br>
   <label for="customText">Teks / ID (opsional):</label>
   <input id="customText" placeholder="Isi catatan, jadwal (event | waktu), atau ID schedule...">
 
-  <br>
-  <button onclick="runTest()">Jalankan Test</button>
+  <button onclick="runTest()">Kirim</button>
 
   <h2>Hasil:</h2>
   <pre id="output">Belum ada hasil.</pre>
@@ -39,16 +40,14 @@
       const text = document.getElementById("customText").value;
 
       document.getElementById("output").textContent =
-        "Mengirim request ke /test?mode=" + mode + "...";
+        "⏳ Mengirim request ke /test?mode=" + mode + "...";
 
       try {
-        const res = await fetch("/test?mode=" + mode + "&text=" + encodeURIComponent(text));
+        const res = await fetch("/test?mode=" + encodeURIComponent(mode) + "&text=" + encodeURIComponent(text));
         const data = await res.json();
-        document.getElementById("output").textContent =
-          JSON.stringify(data, null, 2);
+        document.getElementById("output").textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        document.getElementById("output").textContent =
-          "Error: " + err.message;
+        document.getElementById("output").textContent = "❌ Error: " + err.message;
       }
     }
   </script>

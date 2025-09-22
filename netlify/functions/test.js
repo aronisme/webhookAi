@@ -1,7 +1,15 @@
-const GAS_URL = process.env.GAS_URL; // WebApp URL GAS
+// netlify/functions/test.js
+const GAS_URL = process.env.GAS_URL; // set di Netlify dashboard
 
 exports.handler = async (event) => {
   try {
+    if (!GAS_URL) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ ok: false, error: "GAS_URL not set in environment" }),
+      };
+    }
+
     const query = event.queryStringParameters || {};
     const mode = query.mode || "ping";
     const text = query.text || "";
@@ -10,30 +18,13 @@ exports.handler = async (event) => {
 
     let payload = { command: mode };
 
-    // Sesuaikan payload berdasarkan mode
-    if (mode === "addnote") {
-      payload.text = text || "Catatan test dari Ness";
-    }
-
-    if (mode === "listnotes") {
-      payload.limit = limit;
-    }
-
-    if (mode === "addschedule") {
-      payload.text = text || "Meeting penting | 2025-09-23T09:00";
-    }
-
-    if (mode === "listschedule") {
-      payload.limit = limit;
-    }
-
-    if (mode === "completeschedule") {
-      payload.id = id || text; // bisa isi di kolom input
-    }
-
-    if (mode === "ping") {
-      payload.text = text || "halo dari Netlify";
-    }
+    // Mode → payload
+    if (mode === "addnote") payload.text = text || "Catatan test dari Netlify";
+    if (mode === "listnotes") payload.limit = limit;
+    if (mode === "addschedule") payload.text = text || "Meeting penting | 2025-09-23T09:00";
+    if (mode === "listschedule") payload.limit = limit;
+    if (mode === "completeschedule") payload.id = id || text;
+    if (mode === "ping") payload.text = text || "halo dari Netlify";
 
     // Kirim ke GAS
     const params = new URLSearchParams(payload);
