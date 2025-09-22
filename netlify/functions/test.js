@@ -1,3 +1,4 @@
+//test
 export async function handler(event) {
   try {
     const GAS_URL = process.env.GAS_URL;
