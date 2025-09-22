@@ -1,54 +1,45 @@
-//test
-export async function handler(event) {
+const GAS_URL = process.env.GAS_URL;
+
+exports.handler = async (event) => {
   try {
-    const GAS_URL = process.env.GAS_URL;
+    const mode = (event.queryStringParameters.mode || "addnote").toLowerCase();
 
-    // mode bisa dikirim lewat query param, default: addnote
-    const params = new URLSearchParams(event.queryStringParameters);
-    const mode = (params.get("mode") || "addnote").toLowerCase();
+    let params = new URLSearchParams();
 
-    let payload = {};
-
-    switch (mode) {
-      case "addnote":
-        payload = { command: "addnote", text: "Catatan dari tombol test" };
-        break;
-      case "listnotes":
-        payload = { command: "listnotes", limit: 5 };
-        break;
-      case "addschedule":
-        payload = { command: "addschedule", text: "Meeting Tim | besok 09:00" };
-        break;
-      case "listschedule":
-        payload = { command: "listschedule", limit: 5 };
-        break;
-      case "completeschedule":
-        payload = { command: "completeschedule", id: "ISI_ID_JADWAL" };
-        break;
-      default:
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ ok: false, error: "Mode tidak dikenal: " + mode })
-        };
+    if (mode === "addnote") {
+      params.append("command", "addnote");
+      params.append("text", "Catatan dari tombol test");
+    } else if (mode === "listnotes") {
+      params.append("command", "listnotes");
+      params.append("limit", "5");
+    } else if (mode === "addschedule") {
+      params.append("command", "addschedule");
+      params.append("text", "Meeting Project | 2025-09-23T09:00");
+    } else if (mode === "listschedule") {
+      params.append("command", "listschedule");
+      params.append("limit", "5");
+    } else if (mode === "completeschedule") {
+      params.append("command", "completeschedule");
+      params.append("id", "ISI_ID_JADWAL");
     }
 
     const res = await fetch(GAS_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
     });
 
-    const data = await res.text();
+    const data = await res.json();
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
         mode,
-        sent: payload,
+        sent: Object.fromEntries(params),
         received: data,
         timestamp: new Date().toISOString()
-      })
+      }, null, 2)
     };
   } catch (err) {
     return {
@@ -56,4 +47,4 @@ export async function handler(event) {
       body: JSON.stringify({ ok: false, error: err.message })
     };
   }
-}
+};
