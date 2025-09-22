@@ -2,35 +2,40 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ness Telegram AI</title>
+  <title>Ness Test Panel</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #111; color: #eee; text-align: center; padding: 40px; }
-    button { padding: 10px 20px; font-size: 16px; margin-top: 20px; cursor: pointer; border-radius: 6px; }
-    #log { margin-top: 30px; text-align: left; white-space: pre-wrap; background: #222; padding: 15px; border-radius: 8px; max-width: 800px; margin-left:auto; margin-right:auto; }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+    select, button { padding: 8px; margin-top: 10px; font-size: 16px; }
+    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; }
   </style>
 </head>
 <body>
-  <h1>🤖 Ness AI Assistant</h1>
-  <p>Landing page Ness + tombol testing ke GAS</p>
+  <h1>🚀 Ness Test Panel</h1>
+  <label for="modeSelect">Pilih Mode:</label>
+  <select id="modeSelect">
+    <option value="addnote">Tambah Catatan</option>
+    <option value="listnotes">Lihat Catatan</option>
+    <option value="addschedule">Tambah Jadwal</option>
+    <option value="listschedule">Lihat Jadwal</option>
+    <option value="completeschedule">Selesaikan Jadwal</option>
+  </select>
+  <br>
+  <button onclick="runTest()">Jalankan Test</button>
 
-  <button onclick="testWebhook()">🚀 Jalankan Test GAS</button>
-
-  <div id="log">[Log akan muncul di sini]</div>
+  <h2>Hasil:</h2>
+  <pre id="output">Belum ada hasil.</pre>
 
   <script>
-    async function testWebhook() {
-      const log = document.getElementById("log");
-      log.textContent = "Mengirim request ke function test...\n";
+    async function runTest() {
+      const mode = document.getElementById("modeSelect").value;
+      document.getElementById("output").textContent = "Mengirim request ke /test?mode=" + mode + "...";
 
       try {
-        const res = await fetch("/.netlify/functions/test");
+        const res = await fetch("/test?mode=" + mode);
         const data = await res.json();
-
-        log.textContent += "=== Response ===\n";
-        log.textContent += JSON.stringify(data, null, 2);
+        document.getElementById("output").textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        log.textContent += "ERROR: " + err.message;
+        document.getElementById("output").textContent = "Error: " + err.message;
       }
     }
   </script>
