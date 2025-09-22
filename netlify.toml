@@ -4,3 +4,8 @@
 
 [functions]
   directory = "netlify/functions"
+
+[[redirects]]
+  from = "/test"
+  to = "/.netlify/functions/test"
+  status = 200
