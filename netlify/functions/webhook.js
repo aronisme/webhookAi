@@ -16,6 +16,7 @@ const apiKeys = [
 let keyIndex = 0;
 
 const models = [
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   "google/gemini-2.0-flash-exp:free",   // support vision
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "meta-llama/llama-4-maverick:free",
