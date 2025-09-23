@@ -69,7 +69,7 @@ function getWIBTimeInfo() {
 }
 
 // ===== Memory crumbs =====
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 30;
 const userMemory = {};   // simpan history percakapan
 const userConfig = {};   // simpan preferensi model per user
 const fallbackReplies = [
