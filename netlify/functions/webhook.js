@@ -28,8 +28,8 @@ const models = [
 
 // ===== Memory crumbs =====
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
-const userMemory = {};
-const userConfig = {}; // simpan preferensi per user
+const userMemory = {};   // simpan history percakapan
+const userConfig = {};   // simpan preferensi model per user
 const fallbackReplies = [
   "Boss, Ness lagi error mikir nih 😅",
   "Sepertinya server lagi ngambek 🤖💤",
@@ -89,6 +89,7 @@ function coerceScheduleText(raw) {
   return raw;
 }
 
+// komunikasi dengan GAS
 async function callGAS(payload) {
   try {
     const res = await fetch(GAS_URL, {
