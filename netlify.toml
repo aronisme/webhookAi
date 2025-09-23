@@ -1,11 +1,12 @@
 [build]
-  publish = "public"          # folder static files (index.html, css, js)
-  functions = "netlify/functions"
+  publish = "public"              # folder static untuk HTML, CSS, JS
+  functions = "netlify/functions" # folder fungsi serverless
 
 [functions]
   directory = "netlify/functions"
 
+# redirect opsional: hanya kalau mau custom route
 [[redirects]]
-  from = "/test"
-  to = "/.netlify/functions/test"
+  from = "/note"
+  to = "/.netlify/functions/note"
   status = 200
