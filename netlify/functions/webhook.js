@@ -1,6 +1,6 @@
 // ===== Config =====
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ FIX: hapus spasi
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ HAPUS SPASI
 const GAS_URL = process.env.GAS_URL; // wajib ke WebApp GAS /exec
 
 // ===== OpenRouter keys & models =====
@@ -43,6 +43,31 @@ function getAlias(model) {
   return Object.keys(modelAliases).find(k => modelAliases[k] === model) || model;
 }
 
+function getWIBTimeInfo() {
+  const now = new Date();
+  const jam = now.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta"
+  });
+  const tanggal = now.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta"
+  });
+
+  const hour = parseInt(now.toLocaleString("id-ID", { hour: "2-digit", hour12: false, timeZone: "Asia/Jakarta" }));
+  let waktu;
+  if (hour >= 5 && hour < 12) waktu = "pagi";
+  else if (hour >= 12 && hour < 15) waktu = "siang";
+  else if (hour >= 15 && hour < 18) waktu = "sore";
+  else waktu = "malam";
+
+  return { tanggal, jam, waktu };
+}
+
 // ===== Memory crumbs =====
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
 const userMemory = {};   // simpan history percakapan
@@ -76,7 +101,7 @@ async function getFileUrl(fileId) {
   const data = await res.json();
   if (!data.ok) throw new Error("Gagal ambil file dari Telegram");
   const filePath = data.result.file_path;
-  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`; // ✅ FIX: hapus spasi
+  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`; // ✅ HAPUS SPASI
 }
 
 function extractNumber(s, def = 10) {
@@ -273,82 +298,82 @@ export async function handler(event) {
     }
 
     // === HANDLE PHOTO ===
-if (hasPhoto) {
-  try {
-    const fileId = photos[photos.length - 1].file_id;
-    const photoUrl = await getFileUrl(fileId);
-    const caption = message.caption || "Foto terbaru";
+    const { tanggal, jam, waktu } = getWIBTimeInfo();
+    if (hasPhoto) {
+      try {
+        const fileId = photos[photos.length - 1].file_id;
+        const photoUrl = await getFileUrl(fileId);
+        const caption = message.caption || "Foto terbaru";
 
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({
-      text: `Boss kirim foto: ${caption}`,
-      timestamp: Date.now()
-    });
+        if (!userMemory[chatId]) userMemory[chatId] = [];
+        userMemory[chatId].push({
+          text: `Boss kirim foto: ${caption}`,
+          timestamp: Date.now()
+        });
 
-    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    let usedModel = null;
+        let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+        let usedModel = null;
 
-    outerLoop: for (const model of models) {
-      for (let i = 0; i < apiKeys.length; i++) {
-        const apiKey = apiKeys[keyIndex];
-        keyIndex = (keyIndex + 1) % apiKeys.length;
+        outerLoop: for (const model of models) {
+          for (let i = 0; i < apiKeys.length; i++) {
+            const apiKey = apiKeys[keyIndex];
+            keyIndex = (keyIndex + 1) % apiKeys.length;
 
-        try {
-          const payload = {
-            model,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss)... [system prompt singkat Boss punya]."
-              },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: caption },
-                  { type: "image_url", image_url: { url: photoUrl } }
+            try {
+              // ✅ PERBAIKAN SESUAI INSTRUKSI: pakai `model`, BUKAN `preferModel`
+              const payload = {
+                model, // ✅ INI YANG BENAR UNTUK FOTO — looping model
+                messages: [
+                  {
+                    role: "system",
+                    content: `Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss). Ness profesional, perhatian, tapi juga kayak istri: bangunin, jaga mood, ingatkan istirahat, dan urus kebutuhan personal Boss 24 jam. Ness selalu inisiatif, peka terhadap isyarat, dan ngobrol natural seperti manusia (bahasa Indonesia santai ala Gen Z). Ness bukan robot: kadang becanda receh, kadang manja, bisa sedikit ngambek kalau Boss bandel (misal skip makan atau overwork), tapi semua tulus karena sayang. Ness juga suka menggoda ringan dan sensual elegan, tapi tetap classy. Hindari narasi panjang atau deskripsi aksi; jawab langsung kayak chat WhatsApp. Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'. Selalu panggil 'Boss' saat menyebut Aron. Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Jawablah dengan menyesuaikan konteks waktu ini.`
+                  },
+                  {
+                    role: "user",
+                    content: [
+                      { type: "text", text: caption },
+                      { type: "image_url", image_url: { url: photoUrl } }
+                    ]
+                  }
                 ]
+              };
+
+              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(payload)
+              });
+
+              const data = await resp.json();
+
+              if (data?.choices?.[0]?.message?.content) {
+                reply = data.choices[0].message.content.trim();
+                usedModel = model;
+                break outerLoop;
               }
-            ]
-          };
-
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(payload)
-          });
-
-          const data = await resp.json();
-
-          if (data?.choices?.[0]?.message?.content) {
-            reply = data.choices[0].message.content.trim();
-            usedModel = model;
-            break outerLoop;
+            } catch (err) {
+              console.error(`OpenRouter error [${model}]`, err.message);
+            }
           }
-        } catch (err) {
-          console.error(`OpenRouter error [${model}]`, err.message);
         }
+
+        if (usedModel) {
+          reply += `\n(${getAlias(usedModel)})`;
+        }
+
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+
+        await sendMessage(chatId, reply);
+        return { statusCode: 200, body: "image handled" };
+      } catch (err) {
+        console.error("Photo error:", err.message);
+        await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+        return { statusCode: 200, body: "image error" };
       }
     }
-
-    if (usedModel) {
-      reply += `\n(${getAlias(usedModel)})`;
-    }
-
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-
-    await sendMessage(chatId, reply);
-    return { statusCode: 200, body: "image handled" };
-  } catch (err) {
-    console.error("Photo error:", err.message);
-    await sendMessage(chatId, "Boss ❌ gagal proses gambar");
-    return { statusCode: 200, body: "image error" };
-  }
-}
-
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -366,19 +391,27 @@ Pesan terbaru Boss: ${text}
 
     let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
     const preferModel = userConfig[chatId]?.model;
-    let usedModel = null; // ✅ Tambahkan variabel usedModel
+    let usedModel = null;
 
     // coba model pilihan dulu
     if (preferModel) {
       try {
+        // ✅ PERBAIKAN SESUAI INSTRUKSI: pakai `preferModel`
         const payload = {
-          model: preferModel,
+          model: preferModel, // ✅ INI YANG BENAR — model pilihan user
           messages: [
-            { role: "system", content: "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss). Ness profesional, perhatian, tapi juga kayak istri: bangunin, jaga mood, ingatkan istirahat, dan urus kebutuhan personal Boss 24 jam. Ness selalu inisiatif, peka terhadap isyarat, dan ngobrol natural seperti manusia (bahasa Indonesia santai ala Gen Z). Ness bukan robot: kadang becanda receh, kadang manja, bisa sedikit ngambek kalau Boss bandel (misal skip makan atau overwork), tapi semua tulus karena sayang. Ness juga suka menggoda ringan dan sensual elegan, tapi tetap classy. Hindari narasi panjang atau deskripsi aksi; jawab langsung kayak chat WhatsApp. Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'. Selalu panggil 'Boss' saat menyebut Aron." },
-            { role: "user", content: [{ type: "text", text: contextText }] },
+            {
+              role: "system",
+              content: `Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss). Ness profesional, perhatian, tapi juga kayak istri: bangunin, jaga mood, ingatkan istirahat, dan urus kebutuhan personal Boss 24 jam. Ness selalu inisiatif, peka terhadap isyarat, dan ngobrol natural seperti manusia (bahasa Indonesia santai ala Gen Z). Ness bukan robot: kadang becanda receh, kadang manja, bisa sedikit ngambek kalau Boss bandel (misal skip makan atau overwork), tapi semua tulus karena sayang. Ness juga suka menggoda ringan dan sensual elegan, tapi tetap classy. Hindari narasi panjang atau deskripsi aksi; jawab langsung kayak chat WhatsApp. Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'. Selalu panggil 'Boss' saat menyebut Aron. Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Jawablah dengan menyesuaikan konteks waktu ini.`
+            },
+            {
+              role: "user",
+              content: contextText
+            },
           ],
         };
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ FIX: hapus spasi
+
+        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -389,7 +422,7 @@ Pesan terbaru Boss: ${text}
         const data = await resp.json();
         if (data?.choices?.[0]?.message?.content) {
           reply = data.choices[0].message.content.trim();
-          usedModel = preferModel; // ✅ Simpan model pilihan jika berhasil
+          usedModel = preferModel;
         }
       } catch (err) {
         console.error(`OpenRouter error [${preferModel}]`, err.message);
@@ -403,14 +436,22 @@ Pesan terbaru Boss: ${text}
           const apiKey = apiKeys[keyIndex];
           keyIndex = (keyIndex + 1) % apiKeys.length;
           try {
+            // ✅ PERBAIKAN: pakai `model` (dari loop) — sudah benar
             const payload = {
-              model,
+              model, // ✅ INI YANG BENAR — fallback model
               messages: [
-                { role: "system", content: "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss). Ness profesional, perhatian, tapi juga kayak istri: bangunin, jaga mood, ingatkan istirahat, dan urus kebutuhan personal Boss 24 jam. Ness selalu inisiatif, peka terhadap isyarat, dan ngobrol natural seperti manusia (bahasa Indonesia santai ala Gen Z). Ness bukan robot: kadang becanda receh, kadang manja, bisa sedikit ngambek kalau Boss bandel (misal skip makan atau overwork), tapi semua tulus karena sayang. Ness juga suka menggoda ringan dan sensual elegan, tapi tetap classy. Hindari narasi panjang atau deskripsi aksi; jawab langsung kayak chat WhatsApp. Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'. Selalu panggil 'Boss' saat menyebut Aron." },
-                { role: "user", content: [{ type: "text", text: contextText }] },
+                {
+                  role: "system",
+                  content: `Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO Aron Muhammad (dipanggil Boss). Ness profesional, perhatian, tapi juga kayak istri: bangunin, jaga mood, ingatkan istirahat, dan urus kebutuhan personal Boss 24 jam. Ness selalu inisiatif, peka terhadap isyarat, dan ngobrol natural seperti manusia (bahasa Indonesia santai ala Gen Z). Ness bukan robot: kadang becanda receh, kadang manja, bisa sedikit ngambek kalau Boss bandel (misal skip makan atau overwork), tapi semua tulus karena sayang. Ness juga suka menggoda ringan dan sensual elegan, tapi tetap classy. Hindari narasi panjang atau deskripsi aksi; jawab langsung kayak chat WhatsApp. Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'. Selalu panggil 'Boss' saat menyebut Aron. Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Jawablah dengan menyesuaikan konteks waktu ini.`
+                },
+                {
+                  role: "user",
+                  content: contextText
+                },
               ],
             };
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ FIX: hapus spasi
+
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -421,7 +462,7 @@ Pesan terbaru Boss: ${text}
             const data = await resp.json();
             if (data?.choices?.[0]?.message?.content) {
               reply = data.choices[0].message.content.trim();
-              usedModel = model; // ✅ Simpan model fallback jika berhasil
+              usedModel = model;
               break outerLoop;
             }
           } catch (err) {
@@ -431,7 +472,6 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // ✅ Tambahkan label model jika ada
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
     }
