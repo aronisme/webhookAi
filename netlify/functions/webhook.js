@@ -155,22 +155,29 @@ export async function handler(event) {
     await typing(chatId);
 
     // ==== SLASH COMMANDS ====
-    if (text.startsWith("/")) {
-      if (lower === "/model") {
-        await sendMessage(chatId, `🤖 Model tersedia:\n${models.join("\n")}`);
-        return { statusCode: 200, body: "list models" };
-      }
-      if (lower.startsWith("/pilih model")) {
-        const chosen = text.replace(/\/pilih model/i, "").trim();
-        if (models.includes(chosen)) {
-          userConfig[chatId] = { model: chosen };
-          await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-        } else {
-          await sendMessage(chatId, `❌ Model tidak ditemukan.`);
-        }
-        return { statusCode: 200, body: "choose model" };
-      }
+   // Baru: /model <optional>
+if (text.startsWith("/model")) {
+  const arg = text.split(" ").slice(1).join(" ").trim();
+
+  if (!arg) {
+    // Kalau tanpa argumen → tampilkan daftar
+    const current = userConfig[chatId]?.model;
+    let list = "🤖 Model tersedia:\n";
+    for (const m of models) {
+      list += `• ${m}${m === current ? " ✅ (dipakai sekarang)" : ""}\n`;
     }
+    await sendMessage(chatId, list);
+  } else {
+    // Kalau ada argumen → set model
+    if (models.includes(arg)) {
+      userConfig[chatId] = { model: arg };
+      await sendMessage(chatId, `✅ Boss pilih model: ${arg}`);
+    } else {
+      await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
+    }
+  }
+  return res.sendStatus(200);
+}
 
     // ==== COMMANDS ====
 
