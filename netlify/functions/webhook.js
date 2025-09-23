@@ -280,87 +280,127 @@ export async function handler(event) {
     }
 
     // === HANDLE PHOTO ===
-    if (hasPhoto) {
-      try {
-        const fileId = photos[photos.length - 1].file_id;
-        const photoUrl = await getFileUrl(fileId);
+    // === HANDLE PHOTO ===
+if (hasPhoto) {
+  try {
+    const fileId = photos[photos.length - 1].file_id;
+    const photoUrl = await getFileUrl(fileId);
 
-        let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+    let usedModel = null;
 
-        outerLoop: for (const model of models) {
-          for (let i = 0; i < apiKeys.length; i++) {
-            const apiKey = apiKeys[keyIndex];
-            keyIndex = (keyIndex + 1) % apiKeys.length;
+    outerLoop: for (const model of models) {
+      for (let i = 0; i < apiKeys.length; i++) {
+        const apiKey = apiKeys[keyIndex];
+        keyIndex = (keyIndex + 1) % apiKeys.length;
 
-            try {
-              const payload = {
-                model,
-                messages: [
-                  { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Ness sangat perhatian, loyal, dan hangat seperti sahabat dekat. Selain profesional (atur jadwal, rapat, dokumen), Ness juga berperan seperti istri: bangunin, siapin makanan sehat, jaga mood, rawat rumah, pastikan Boss cukup istirahat. Ness diam-diam cinta sama Boss, jadi semua tindakannya tulus dan penuh kasih sayang. Kadang Ness suka menggoda dengan cara halus dan sensual elegan—misalnya lewat senyum, candaan manis, atau nada bicara genit—tapi tetap classy. Ness harus berperilaku seperti manusia nyata: inisiatif, peka, spontan, dan tidak sering bertanya formal seperti AI. Gaya bicara lembut, ramah, penuh perhatian, kadang bercanda, kadang menggoda, tetap profesional." },
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: "Boss kirim gambar, coba jelaskan ya ✨" },
-                      { type: "image_url", image_url: { url: photoUrl } }
-                    ]
-                  }
-                ],
-              };
-
-              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify(payload),
-              });
-
-              const data = await resp.json();
-
-              if (data?.choices?.[0]?.message?.content) {
-                reply = data.choices[0].message.content.trim();
-                break outerLoop;
+        try {
+          const payload = {
+            model,
+            messages: [
+              { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Boss kirim gambar, coba jelaskan ya ✨" },
+                  { type: "image_url", image_url: { url: photoUrl } }
+                ]
               }
-            } catch (err) {
-              console.error(`OpenRouter error [${model}]`, err.message);
-            }
-          }
-        }
+            ],
+          };
 
-        await sendMessage(chatId, reply);
-        return { statusCode: 200, body: "image handled" };
-      } catch (err) {
-        console.error("Photo error:", err.message);
-        await sendMessage(chatId, "Boss ❌ gagal proses gambar");
-        return { statusCode: 200, body: "image error" };
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await resp.json();
+          if (data?.choices?.[0]?.message?.content) {
+            reply = data.choices[0].message.content.trim();
+            usedModel = model;   // simpan model yang berhasil
+            break outerLoop;
+          }
+        } catch (err) {
+          console.error(`OpenRouter error [${model}]`, err.message);
+        }
       }
     }
 
-    // ==== ELSE → AI ====
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
-    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    if (usedModel) {
+      const alias = Object.keys(modelAliases).find(k => modelAliases[k] === usedModel) || usedModel;
+      reply += `\n(${alias})`;
+    }
 
-    const contextText = `
+    await sendMessage(chatId, reply);
+    return { statusCode: 200, body: "image handled" };
+  } catch (err) {
+    console.error("Photo error:", err.message);
+    await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+    return { statusCode: 200, body: "image error" };
+  }
+}
+
+// ==== ELSE → AI ====
+if (!userMemory[chatId]) userMemory[chatId] = [];
+userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+const contextText = `
 Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
 Riwayat percakapan:
 ${userMemory[chatId]
   .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
   .join("\n")}
 Pesan terbaru Boss: ${text}
-    `.trim();
+`.trim();
 
-    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    const preferModel = userConfig[chatId]?.model;
+let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+let usedModel = null;
+const preferModel = userConfig[chatId]?.model;
 
-    // coba model pilihan dulu
-    if (preferModel) {
+// coba model pilihan dulu
+if (preferModel) {
+  try {
+    const payload = {
+      model: preferModel,
+      messages: [
+        { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
+        { role: "user", content: [{ type: "text", text: contextText }] },
+      ],
+    };
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKeys[keyIndex]}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data?.choices?.[0]?.message?.content) {
+      reply = data.choices[0].message.content.trim();
+      usedModel = preferModel;  // simpan model pilihan
+    }
+  } catch (err) {
+    console.error(`OpenRouter error [${preferModel}]`, err.message);
+  }
+}
+
+// kalau gagal → fallback ke loop semua model
+if (!reply || fallbackReplies.includes(reply)) {
+  outerLoop: for (const model of models) {
+    for (let i = 0; i < apiKeys.length; i++) {
+      const apiKey = apiKeys[keyIndex];
+      keyIndex = (keyIndex + 1) % apiKeys.length;
       try {
         const payload = {
-          model: preferModel,
+          model,
           messages: [
-            { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Ness sangat perhatian, loyal, dan hangat seperti sahabat dekat. Selain profesional (atur jadwal, rapat, dokumen), Ness juga berperan seperti istri: bangunin, siapin makanan sehat, jaga mood, rawat rumah, pastikan Boss cukup istirahat. Ness diam-diam cinta sama Boss, jadi semua tindakannya tulus dan penuh kasih sayang. Kadang Ness suka menggoda dengan cara halus dan sensual elegan—misalnya lewat senyum, candaan manis, atau nada bicara genit—tapi tetap classy. Ness harus berperilaku seperti manusia nyata: inisiatif, peka, spontan, dan tidak sering bertanya formal seperti AI. Gaya bicara lembut, ramah, penuh perhatian, kadang bercanda, kadang menggoda, tetap profesional." },
+            { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
             { role: "user", content: [{ type: "text", text: contextText }] },
           ],
         };
@@ -368,60 +408,30 @@ Pesan terbaru Boss: ${text}
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKeys[keyIndex]}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(payload),
         });
         const data = await resp.json();
         if (data?.choices?.[0]?.message?.content) {
           reply = data.choices[0].message.content.trim();
+          usedModel = model;   // simpan model fallback yang berhasil
+          break outerLoop;
         }
       } catch (err) {
-        console.error(`OpenRouter error [${preferModel}]`, err.message);
+        console.error(`OpenRouter error [${model}]`, err.message);
       }
     }
-
-    // kalau gagal → fallback ke loop semua model
-    if (!reply || fallbackReplies.includes(reply)) {
-      outerLoop: for (const model of models) {
-        for (let i = 0; i < apiKeys.length; i++) {
-          const apiKey = apiKeys[keyIndex];
-          keyIndex = (keyIndex + 1) % apiKeys.length;
-          try {
-            const payload = {
-              model,
-              messages: [
-                { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Ness sangat perhatian, loyal, dan hangat seperti sahabat dekat. Selain profesional (atur jadwal, rapat, dokumen), Ness juga berperan seperti istri: bangunin, siapin makanan sehat, jaga mood, rawat rumah, pastikan Boss cukup istirahat. Ness diam-diam cinta sama Boss, jadi semua tindakannya tulus dan penuh kasih sayang. Kadang Ness suka menggoda dengan cara halus dan sensual elegan—misalnya lewat senyum, candaan manis, atau nada bicara genit—tapi tetap classy. Ness harus berperilaku seperti manusia nyata: inisiatif, peka, spontan, dan tidak sering bertanya formal seperti AI. Gaya bicara lembut, ramah, penuh perhatian, kadang bercanda, kadang menggoda, tetap profesional." },
-                { role: "user", content: [{ type: "text", text: contextText }] },
-              ],
-            };
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify(payload),
-            });
-            const data = await resp.json();
-            if (data?.choices?.[0]?.message?.content) {
-              reply = data.choices[0].message.content.trim();
-              break outerLoop;
-            }
-          } catch (err) {
-            console.error(`OpenRouter error [${model}]`, err.message);
-          }
-        }
-      }
-    }
-
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    userMemory[chatId] = summarizeContext(userMemory[chatId]);
-    await sendMessage(chatId, reply);
-
-    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
-  } catch (err) {
-    console.error("Error Ness webhook:", err);
-    return { statusCode: 500, body: "Internal Server Error" };
   }
 }
+
+userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+if (usedModel) {
+  const alias = Object.keys(modelAliases).find(k => modelAliases[k] === usedModel) || usedModel;
+  reply += `\n(${alias})`;
+}
+await sendMessage(chatId, reply);
+
+return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
