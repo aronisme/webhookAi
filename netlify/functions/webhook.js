@@ -26,6 +26,18 @@ const models = [
   "x-ai/grok-4-fast:free",
 ];
 
+// alias → model
+const modelAliases = {
+  dolphin: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  gemini: "google/gemini-2.0-flash-exp:free",
+  mistral31: "mistralai/mistral-small-3.1-24b-instruct:free",
+  maverick: "meta-llama/llama-4-maverick:free",
+  scout: "meta-llama/llama-4-scout:free",
+  kimi: "moonshotai/kimi-vl-a3b-thinking:free",
+  mistral32: "mistralai/mistral-small-3.2-24b-instruct:free",
+  grok: "x-ai/grok-4-fast:free"
+};
+
 // ===== Memory crumbs =====
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
 const userMemory = {};   // simpan history percakapan
@@ -156,20 +168,32 @@ export async function handler(event) {
 
     // ==== SLASH COMMANDS ====
     if (text.startsWith("/")) {
-      if (lower === "/model") {
-        await sendMessage(chatId, `🤖 Model tersedia:\n${models.join("\n")}`);
-        return { statusCode: 200, body: "list models" };
-      }
-      if (lower.startsWith("/pilih model")) {
-        const chosen = text.replace(/\/pilih model/i, "").trim();
-        if (models.includes(chosen)) {
-          userConfig[chatId] = { model: chosen };
-          await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-        } else {
-          await sendMessage(chatId, `❌ Model tidak ditemukan.`);
-        }
-        return { statusCode: 200, body: "choose model" };
-      }
+     if (lower.startsWith("/model")) {
+  const arg = text.split(" ").slice(1).join(" ").trim();
+
+  if (!arg) {
+    // list semua model
+    const current = userConfig[chatId]?.model;
+    let list = "🤖 Model tersedia:\n";
+    for (const m of models) {
+      const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
+      list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
+    }
+    await sendMessage(chatId, list);
+    return { statusCode: 200, body: "list models" };
+  } else {
+    // cek alias dulu
+    const chosen = modelAliases[arg] || arg;
+    if (models.includes(chosen)) {
+      userConfig[chatId] = { model: chosen };
+      await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
+    } else {
+      await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
+    }
+    return { statusCode: 200, body: "choose model" };
+  }
+}
+
     }
 
     // ==== COMMANDS ====
