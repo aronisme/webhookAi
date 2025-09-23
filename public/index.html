@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h1>Input Note Sederhana njjjjjj</h1>
+  <h1>Input Note Sederhana</h1>
   <form id="noteForm">
     <label for="note">Masukkan Note:</label>
     <textarea id="note" name="note" required></textarea>
@@ -28,20 +28,21 @@
     const form = document.getElementById('noteForm');
     const message = document.getElementById('message');
     const errorDiv = document.getElementById('error');
-    const gasUrl = 'https://script.google.com/macros/s/AKfycbxD_VyFL0GCC2gVFmpa4ckjh7wweEnx6-Ry3MLgMXiQOofyDdSgzuV-lqeOTHWHJA3s/exec'; // ganti dgn URL GAS kamu
+
+    // arahkan ke Netlify Function endpoint
+    const apiUrl = '/.netlify/functions/note';
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const note = document.getElementById('note').value;
+      const note = document.getElementById('note').value.trim();
       message.textContent = 'Mengirim...';
       errorDiv.textContent = '';
 
       try {
-        // Gunakan form-urlencoded agar jadi simple request
         const formData = new URLSearchParams();
         formData.append('note', note);
 
-        const response = await fetch(gasUrl, {
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: formData.toString()
@@ -56,12 +57,11 @@
           form.reset();
         } else {
           errorDiv.textContent = `Gagal menyimpan: ${data.error || 'Unknown error'}`;
+          message.textContent = '';
         }
       } catch (error) {
         errorDiv.textContent = `Error: ${error.message}`;
-        if (error.message.includes('Failed to fetch')) {
-          errorDiv.textContent += ' (Cek URL GAS atau koneksi internet)';
-        }
+        message.textContent = '';
       }
     });
   </script>
