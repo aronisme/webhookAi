@@ -16,13 +16,13 @@ const apiKeys = [
 let keyIndex = 0;
 
 const models = [
-  "google/gemini-2.0-flash-exp:free",
-  "x-ai/grok-4-fast:free",
+  "google/gemini-2.0-flash-exp:free",   // support vision
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
-  "moonshotai/kimi-vl-a3b-thinking:free",
+  "moonshotai/kimi-vl-a3b-thinking:free", // support vision
   "mistralai/mistral-small-3.2-24b-instruct:free",
+  "x-ai/grok-4-fast:free",
 ];
 
 // ===== Memory crumbs =====
@@ -50,6 +50,14 @@ async function typing(chatId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, action: "typing" }),
   });
+}
+
+async function getFileUrl(fileId) {
+  const res = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error("Gagal ambil file dari Telegram");
+  const filePath = data.result.file_path;
+  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 }
 
 function extractNumber(s, def = 10) {
@@ -133,6 +141,8 @@ export async function handler(event) {
     const chatId = message.chat.id;
     const text = (message.text || "").trim();
     const lower = text.toLowerCase();
+    const photos = message.photo || [];
+    const hasPhoto = photos.length > 0;
 
     if (text.length > 1000) {
       await sendMessage(chatId, "Boss, pesan terlalu panjang 😅");
@@ -245,6 +255,65 @@ export async function handler(event) {
       await sendMessage(chatId, "Boss, memori Ness sudah dihapus! ✨");
       return { statusCode: 200, body: "clear mem" };
     }
+
+    // === HANDLE PHOTO ===
+if (hasPhoto) {
+  try {
+    const fileId = photos[photos.length - 1].file_id;
+    const photoUrl = await getFileUrl(fileId);
+
+    let reply =
+      fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+
+    outerLoop: for (const model of models) {
+      for (let i = 0; i < apiKeys.length; i++) {
+        const apiKey = apiKeys[keyIndex];
+        keyIndex = (keyIndex + 1) % apiKeys.length;
+
+        try {
+          const payload = {
+            model,
+            messages: [
+              { role: "system", content: "Kamu adalah Ness, asisten pribadi cewek." },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "Boss kirim gambar, coba jelaskan ya ✨" },
+                  { type: "image_url", image_url: { url: photoUrl } }
+                ]
+              }
+            ],
+          };
+
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await resp.json();
+
+          if (data?.choices?.[0]?.message?.content) {
+            reply = data.choices[0].message.content.trim();
+            break outerLoop;
+          }
+        } catch (err) {
+          console.error(`OpenRouter error [${model}]`, err.message);
+        }
+      }
+    }
+
+    await sendMessage(chatId, reply);
+    return { statusCode: 200, body: "image handled" };
+  } catch (err) {
+    console.error("Photo error:", err.message);
+    await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+    return { statusCode: 200, body: "image error" };
+  }
+}
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
