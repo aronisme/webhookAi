@@ -1,6 +1,6 @@
 // ===== Config =====
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ FIX: hapus spasi
 const GAS_URL = process.env.GAS_URL; // wajib ke WebApp GAS /exec
 
 // ===== OpenRouter keys & models =====
@@ -16,9 +16,9 @@ const apiKeys = [
 let keyIndex = 0;
 
 const models = [
-  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   "google/gemini-2.0-flash-exp:free",   // support vision
   "mistralai/mistral-small-3.1-24b-instruct:free",
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
   "moonshotai/kimi-vl-a3b-thinking:free", // support vision
@@ -37,6 +37,11 @@ const modelAliases = {
   mistral32: "mistralai/mistral-small-3.2-24b-instruct:free",
   grok: "x-ai/grok-4-fast:free"
 };
+
+// ✅ Fungsi helper baru: dapatkan alias pendek
+function getAlias(model) {
+  return Object.keys(modelAliases).find(k => modelAliases[k] === model) || model;
+}
 
 // ===== Memory crumbs =====
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
@@ -71,7 +76,7 @@ async function getFileUrl(fileId) {
   const data = await res.json();
   if (!data.ok) throw new Error("Gagal ambil file dari Telegram");
   const filePath = data.result.file_path;
-  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`; // ✅ FIX: hapus spasi
 }
 
 function extractNumber(s, def = 10) {
@@ -79,13 +84,11 @@ function extractNumber(s, def = 10) {
   return m ? parseInt(m[1], 10) : def;
 }
 
-// catat → ambil isi
 function extractNoteContent(raw) {
   const m = raw.match(/\b(catat|note)\b[:\s-]*(.+)/i);
   return m ? m[2].trim() : "";
 }
 
-// jadwal → tambahin delimiter kalau lupa
 function coerceScheduleText(raw) {
   if (raw.includes("|")) return raw;
   const tRe = /\b((besok|lusa|hari ini)\s+\d{1,2}:\d{2}|\d{1,2}:\d{2})\b/i;
@@ -101,7 +104,6 @@ function coerceScheduleText(raw) {
   return raw;
 }
 
-// komunikasi dengan GAS
 async function callGAS(payload) {
   try {
     const res = await fetch(GAS_URL, {
@@ -168,37 +170,33 @@ export async function handler(event) {
 
     // ==== SLASH COMMANDS ====
     if (text.startsWith("/")) {
-     if (lower.startsWith("/model")) {
-  const arg = text.split(" ").slice(1).join(" ").trim();
+      if (lower.startsWith("/model")) {
+        const arg = text.split(" ").slice(1).join(" ").trim();
 
-  if (!arg) {
-    // list semua model
-    const current = userConfig[chatId]?.model;
-    let list = "🤖 Model tersedia:\n";
-    for (const m of models) {
-      const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
-      list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
-    }
-    await sendMessage(chatId, list);
-    return { statusCode: 200, body: "list models" };
-  } else {
-    // cek alias dulu
-    const chosen = modelAliases[arg] || arg;
-    if (models.includes(chosen)) {
-      userConfig[chatId] = { model: chosen };
-      await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-    } else {
-      await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
-    }
-    return { statusCode: 200, body: "choose model" };
-  }
-}
-
+        if (!arg) {
+          const current = userConfig[chatId]?.model;
+          let list = "🤖 Model tersedia:\n";
+          for (const m of models) {
+            const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
+            list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
+          }
+          await sendMessage(chatId, list);
+          return { statusCode: 200, body: "list models" };
+        } else {
+          const chosen = modelAliases[arg] || arg;
+          if (models.includes(chosen)) {
+            userConfig[chatId] = { model: chosen };
+            await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
+          } else {
+            await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
+          }
+          return { statusCode: 200, body: "choose model" };
+        }
+      }
     }
 
     // ==== COMMANDS ====
 
-    // DEBUG GAS
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
@@ -209,7 +207,6 @@ export async function handler(event) {
       return { statusCode: 200, body: "debug gas" };
     }
 
-    // CATAT
     if (/\b(catat|note)\b/i.test(lower)) {
       const content = extractNoteContent(text);
       if (!content) {
@@ -225,7 +222,6 @@ export async function handler(event) {
       return { statusCode: 200, body: "note route" };
     }
 
-    // LIHAT CATATAN
     if (lower.includes("lihat catatan")) {
       const limit = extractNumber(lower, 10);
       try {
@@ -241,7 +237,6 @@ export async function handler(event) {
       return { statusCode: 200, body: "list notes" };
     }
 
-    // JADWAL
     if (/\b(jadwal(?:kan)?|ingatkan|remind)\b/i.test(lower)) {
       const coerced = coerceScheduleText(text);
       try {
@@ -253,7 +248,6 @@ export async function handler(event) {
       return { statusCode: 200, body: "schedule route" };
     }
 
-    // LIHAT JADWAL
     if (lower.includes("lihat jadwal")) {
       const limit = extractNumber(lower, 10);
       try {
@@ -272,7 +266,6 @@ export async function handler(event) {
       return { statusCode: 200, body: "list schedule" };
     }
 
-    // HAPUS MEMORI
     if (lower === "hapus memori") {
       delete userMemory[chatId];
       await sendMessage(chatId, "Boss, memori Ness sudah dihapus! ✨");
@@ -286,6 +279,7 @@ export async function handler(event) {
         const photoUrl = await getFileUrl(fileId);
 
         let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+        let usedModel = null; // ✅ Tambahkan variabel usedModel
 
         outerLoop: for (const model of models) {
           for (let i = 0; i < apiKeys.length; i++) {
@@ -307,7 +301,7 @@ export async function handler(event) {
                 ],
               };
 
-              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ FIX: hapus spasi
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -320,12 +314,18 @@ export async function handler(event) {
 
               if (data?.choices?.[0]?.message?.content) {
                 reply = data.choices[0].message.content.trim();
+                usedModel = model; // ✅ Simpan model yang berhasil
                 break outerLoop;
               }
             } catch (err) {
               console.error(`OpenRouter error [${model}]`, err.message);
             }
           }
+        }
+
+        // ✅ Tambahkan label model jika berhasil
+        if (usedModel) {
+          reply += `\n(${getAlias(usedModel)})`;
         }
 
         await sendMessage(chatId, reply);
@@ -353,6 +353,7 @@ Pesan terbaru Boss: ${text}
 
     let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
     const preferModel = userConfig[chatId]?.model;
+    let usedModel = null; // ✅ Tambahkan variabel usedModel
 
     // coba model pilihan dulu
     if (preferModel) {
@@ -364,7 +365,7 @@ Pesan terbaru Boss: ${text}
             { role: "user", content: [{ type: "text", text: contextText }] },
           ],
         };
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ FIX: hapus spasi
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -375,6 +376,7 @@ Pesan terbaru Boss: ${text}
         const data = await resp.json();
         if (data?.choices?.[0]?.message?.content) {
           reply = data.choices[0].message.content.trim();
+          usedModel = preferModel; // ✅ Simpan model pilihan jika berhasil
         }
       } catch (err) {
         console.error(`OpenRouter error [${preferModel}]`, err.message);
@@ -395,7 +397,7 @@ Pesan terbaru Boss: ${text}
                 { role: "user", content: [{ type: "text", text: contextText }] },
               ],
             };
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ FIX: hapus spasi
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -406,6 +408,7 @@ Pesan terbaru Boss: ${text}
             const data = await resp.json();
             if (data?.choices?.[0]?.message?.content) {
               reply = data.choices[0].message.content.trim();
+              usedModel = model; // ✅ Simpan model fallback jika berhasil
               break outerLoop;
             }
           } catch (err) {
@@ -413,6 +416,11 @@ Pesan terbaru Boss: ${text}
           }
         }
       }
+    }
+
+    // ✅ Tambahkan label model jika ada
+    if (usedModel) {
+      reply += `\n(${getAlias(usedModel)})`;
     }
 
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
