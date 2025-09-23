@@ -2,54 +2,68 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Ness GAS Test Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simpless Note Appkk</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; }
-    select, button, input { padding: 8px; margin-top: 10px; font-size: 16px; }
-    input, select { width: 100%; box-sizing: border-box; }
-    button { background: #007bff; color: #fff; border: none; cursor: pointer; }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+    form { display: flex; flex-direction: column; }
+    textarea { height: 100px; margin-bottom: 10px; padding: 10px; }
+    button { padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
     button:hover { background: #0056b3; }
-    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; }
-    label { margin-top: 15px; display: block; font-weight: bold; }
+    #message { margin-top: 10px; color: green; }
+    #error { margin-top: 10px; color: red; }
   </style>
 </head>
 <body>
-  <h1>🚀 Ness GAS Test Panel</h1>
-
-  <label for="modeSelect">Pilih Command:</label>
-  <select id="modeSelect">
-    <option value="ping">🔌 Ping (tes koneksi)</option>
-    <option value="addnote">Tambah Catatan</option>
-    <option value="listnotes">Lihat Catatan</option>
-    <option value="addschedule">Tambah Jadwal</option>
-    <option value="listschedule">Lihat Jadwal</option>
-    <option value="completeschedule">Selesaikan Jadwal</option>
-  </select>
-
-  <label for="customText">Teks / ID (opsional):</label>
-  <input id="customText" placeholder="Isi catatan, jadwal (event | waktu), atau ID schedule...">
-
-  <button onclick="runTest()">Kirim</button>
-
-  <h2>Hasil:</h2>
-  <pre id="output">Belum ada hasil.</pre>
+  <h1>Input Note Sederhana njjjjjj</h1>
+  <form id="noteForm">
+    <label for="note">Masukkan Note:</label>
+    <textarea id="note" name="note" required></textarea>
+    <button type="submit">Simpan Note</button>
+  </form>
+  <div id="message"></div>
+  <div id="error"></div>
 
   <script>
-    async function runTest() {
-      const mode = document.getElementById("modeSelect").value;
-      const text = document.getElementById("customText").value;
+    const form = document.getElementById('noteForm');
+    const message = document.getElementById('message');
+    const errorDiv = document.getElementById('error');
+    const gasUrl = 'https://script.google.com/macros/s/AKfycbxD_VyFL0GCC2gVFmpa4ckjh7wweEnx6-Ry3MLgMXiQOofyDdSgzuV-lqeOTHWHJA3s/exec'; // ganti dgn URL GAS kamu
 
-      document.getElementById("output").textContent =
-        "⏳ Mengirim request ke /test?mode=" + mode + "...";
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const note = document.getElementById('note').value;
+      message.textContent = 'Mengirim...';
+      errorDiv.textContent = '';
 
       try {
-        const res = await fetch("/test?mode=" + encodeURIComponent(mode) + "&text=" + encodeURIComponent(text));
-        const data = await res.json();
-        document.getElementById("output").textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        document.getElementById("output").textContent = "❌ Error: " + err.message;
+        // Gunakan form-urlencoded agar jadi simple request
+        const formData = new URLSearchParams();
+        formData.append('note', note);
+
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
+        });
+
+        const data = await response.json();
+        console.log('Response:', data);
+
+        if (response.ok && data.status === 'success') {
+          message.textContent = 'Note berhasil disimpan!';
+          errorDiv.textContent = '';
+          form.reset();
+        } else {
+          errorDiv.textContent = `Gagal menyimpan: ${data.error || 'Unknown error'}`;
+        }
+      } catch (error) {
+        errorDiv.textContent = `Error: ${error.message}`;
+        if (error.message.includes('Failed to fetch')) {
+          errorDiv.textContent += ' (Cek URL GAS atau koneksi internet)';
+        }
       }
-    }
+    });
   </script>
 </body>
 </html>
