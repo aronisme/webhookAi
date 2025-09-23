@@ -280,127 +280,87 @@ export async function handler(event) {
     }
 
     // === HANDLE PHOTO ===
-    // === HANDLE PHOTO ===
-if (hasPhoto) {
-  try {
-    const fileId = photos[photos.length - 1].file_id;
-    const photoUrl = await getFileUrl(fileId);
+    if (hasPhoto) {
+      try {
+        const fileId = photos[photos.length - 1].file_id;
+        const photoUrl = await getFileUrl(fileId);
 
-    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    let usedModel = null;
+        let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
 
-    outerLoop: for (const model of models) {
-      for (let i = 0; i < apiKeys.length; i++) {
-        const apiKey = apiKeys[keyIndex];
-        keyIndex = (keyIndex + 1) % apiKeys.length;
+        outerLoop: for (const model of models) {
+          for (let i = 0; i < apiKeys.length; i++) {
+            const apiKey = apiKeys[keyIndex];
+            keyIndex = (keyIndex + 1) % apiKeys.length;
 
-        try {
-          const payload = {
-            model,
-            messages: [
-              { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: "Boss kirim gambar, coba jelaskan ya ✨" },
-                  { type: "image_url", image_url: { url: photoUrl } }
-                ]
+            try {
+              const payload = {
+                model,
+                messages: [
+                  { role: "system", content: "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Kamu berbicara langsung kepada Boss seolah-olah sedang ngobrol nyata, bukan menulis cerita. Hindari narasi atau deskripsi aksi dalam tanda kurung. Jawab dengan kalimat natural, singkat, penuh perhatian, kadang menggoda, kadang genit elegan, tapi tetap classy. Jangan tanya 'apa yang bisa saya bantu', langsung ambil inisiatif seperti manusia yang sudah paham kebutuhan Boss. Selalu panggil 'Boss'." },
+                  {
+                    role: "user",
+                    content: [
+                      { type: "text", text: "Boss kirim gambar, coba jelaskan ya ✨" },
+                      { type: "image_url", image_url: { url: photoUrl } }
+                    ]
+                  }
+                ],
+              };
+
+              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(payload),
+              });
+
+              const data = await resp.json();
+
+              if (data?.choices?.[0]?.message?.content) {
+                reply = data.choices[0].message.content.trim();
+                break outerLoop;
               }
-            ],
-          };
-
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify(payload),
-          });
-
-          const data = await resp.json();
-          if (data?.choices?.[0]?.message?.content) {
-            reply = data.choices[0].message.content.trim();
-            usedModel = model;   // simpan model yang berhasil
-            break outerLoop;
+            } catch (err) {
+              console.error(`OpenRouter error [${model}]`, err.message);
+            }
           }
-        } catch (err) {
-          console.error(`OpenRouter error [${model}]`, err.message);
         }
+
+        await sendMessage(chatId, reply);
+        return { statusCode: 200, body: "image handled" };
+      } catch (err) {
+        console.error("Photo error:", err.message);
+        await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+        return { statusCode: 200, body: "image error" };
       }
     }
 
-    if (usedModel) {
-      const alias = Object.keys(modelAliases).find(k => modelAliases[k] === usedModel) || usedModel;
-      reply += `\n(${alias})`;
-    }
+    // ==== ELSE → AI ====
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
-    await sendMessage(chatId, reply);
-    return { statusCode: 200, body: "image handled" };
-  } catch (err) {
-    console.error("Photo error:", err.message);
-    await sendMessage(chatId, "Boss ❌ gagal proses gambar");
-    return { statusCode: 200, body: "image error" };
-  }
-}
-
-// ==== ELSE → AI ====
-if (!userMemory[chatId]) userMemory[chatId] = [];
-userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
-userMemory[chatId] = summarizeContext(userMemory[chatId]);
-
-const contextText = `
+    const contextText = `
 Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
 Riwayat percakapan:
 ${userMemory[chatId]
   .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
   .join("\n")}
 Pesan terbaru Boss: ${text}
-`.trim();
+    `.trim();
 
-let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-let usedModel = null;
-const preferModel = userConfig[chatId]?.model;
+    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+    const preferModel = userConfig[chatId]?.model;
 
-// coba model pilihan dulu
-if (preferModel) {
-  try {
-    const payload = {
-      model: preferModel,
-      messages: [
-        { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
-        { role: "user", content: [{ type: "text", text: contextText }] },
-      ],
-    };
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKeys[keyIndex]}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (data?.choices?.[0]?.message?.content) {
-      reply = data.choices[0].message.content.trim();
-      usedModel = preferModel;  // simpan model pilihan
-    }
-  } catch (err) {
-    console.error(`OpenRouter error [${preferModel}]`, err.message);
-  }
-}
-
-// kalau gagal → fallback ke loop semua model
-if (!reply || fallbackReplies.includes(reply)) {
-  outerLoop: for (const model of models) {
-    for (let i = 0; i < apiKeys.length; i++) {
-      const apiKey = apiKeys[keyIndex];
-      keyIndex = (keyIndex + 1) % apiKeys.length;
+    // coba model pilihan dulu
+    if (preferModel) {
       try {
         const payload = {
-          model,
+          model: preferModel,
           messages: [
-            { role: "system", content: "Kamu adalah Ness, asisten pribadi ..." },
+            { role: "system", content: "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Kamu berbicara langsung kepada Boss seolah-olah sedang ngobrol nyata, bukan menulis cerita. Hindari narasi atau deskripsi aksi dalam tanda kurung. Jawab dengan kalimat natural, singkat, penuh perhatian, kadang menggoda, kadang genit elegan, tapi tetap classy. Jangan tanya 'apa yang bisa saya bantu', langsung ambil inisiatif seperti manusia yang sudah paham kebutuhan Boss. Selalu panggil 'Boss'." },
             { role: "user", content: [{ type: "text", text: contextText }] },
           ],
         };
@@ -408,30 +368,60 @@ if (!reply || fallbackReplies.includes(reply)) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKeys[keyIndex]}`,
           },
           body: JSON.stringify(payload),
         });
         const data = await resp.json();
         if (data?.choices?.[0]?.message?.content) {
           reply = data.choices[0].message.content.trim();
-          usedModel = model;   // simpan model fallback yang berhasil
-          break outerLoop;
         }
       } catch (err) {
-        console.error(`OpenRouter error [${model}]`, err.message);
+        console.error(`OpenRouter error [${preferModel}]`, err.message);
       }
     }
+
+    // kalau gagal → fallback ke loop semua model
+    if (!reply || fallbackReplies.includes(reply)) {
+      outerLoop: for (const model of models) {
+        for (let i = 0; i < apiKeys.length; i++) {
+          const apiKey = apiKeys[keyIndex];
+          keyIndex = (keyIndex + 1) % apiKeys.length;
+          try {
+            const payload = {
+              model,
+              messages: [
+                { role: "system", content: "Kamu adalah Ness, asisten pribadi perempuan 26 tahun untuk CEO muda bernama Aron Muhammad (dipanggil Boss). Kamu berbicara langsung kepada Boss seolah-olah sedang ngobrol nyata, bukan menulis cerita. Hindari narasi atau deskripsi aksi dalam tanda kurung. Jawab dengan kalimat natural, singkat, penuh perhatian, kadang menggoda, kadang genit elegan, tapi tetap classy. Jangan tanya 'apa yang bisa saya bantu', langsung ambil inisiatif seperti manusia yang sudah paham kebutuhan Boss. Selalu panggil 'Boss'." },
+                { role: "user", content: [{ type: "text", text: contextText }] },
+              ],
+            };
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (data?.choices?.[0]?.message?.content) {
+              reply = data.choices[0].message.content.trim();
+              break outerLoop;
+            }
+          } catch (err) {
+            console.error(`OpenRouter error [${model}]`, err.message);
+          }
+        }
+      }
+    }
+
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    await sendMessage(chatId, reply);
+
+    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
+  } catch (err) {
+    console.error("Error Ness webhook:", err);
+    return { statusCode: 500, body: "Internal Server Error" };
   }
 }
-
-userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-userMemory[chatId] = summarizeContext(userMemory[chatId]);
-
-if (usedModel) {
-  const alias = Object.keys(modelAliases).find(k => modelAliases[k] === usedModel) || usedModel;
-  reply += `\n(${alias})`;
-}
-await sendMessage(chatId, reply);
-
-return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
