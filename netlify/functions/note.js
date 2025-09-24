@@ -1,29 +1,30 @@
-// netlify/functions/note.js
+const gasUrl = "https://script.google.com/macros/s/AKfycbzH2e5az5nly_TrmT2vy29lrb_nAh7Zb3fQjk5g_HNj6WZe8qjNBtPTifgesiBCmxwx/exec?auth=MYSECRET123";
 
-const gasUrl =
-  "https://script.google.com/macros/s/AKfycbw3ip8m4J1OfOckfsVp4jwIOi6pKF36o27Y1OGuwtJ2BIqdCmtYI6bcExzalh7mMzo/exec";
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ status: "error", error: "Method Not Allowed" }) };
-  }
-
-  try {
-    const response = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: event.body,
-    });
-
-    const text = await response.text();
-    let data;
+  if (event.httpMethod === "GET") {
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = { status: "error", error: "Invalid response from GAS", raw: text };
+      const url = gasUrl + (event.rawQuery ? "&" + event.rawQuery : "");
+      const response = await fetch(url);
+      const text = await response.text();
+      return { statusCode: response.ok ? 200 : 500, body: text };
+    } catch (err) {
+      return { statusCode: 500, body: JSON.stringify({ status: "error", error: err.message }) };
     }
-
-    return { statusCode: response.ok ? 200 : 500, body: JSON.stringify(data) };
-  } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ status: "error", error: err.message }) };
   }
+
+  if (event.httpMethod === "POST") {
+    try {
+      const response = await fetch(gasUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: event.body,
+      });
+      const text = await response.text();
+      return { statusCode: response.ok ? 200 : 500, body: text };
+    } catch (err) {
+      return { statusCode: 500, body: JSON.stringify({ status: "error", error: err.message }) };
+    }
+  }
+
+  return { statusCode: 405, body: JSON.stringify({ status: "error", error: "Method Not Allowed" }) };
 };

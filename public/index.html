@@ -2,58 +2,129 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Catatan ke Sheet</title>
+  <title>📑 Sistem Catatan & Jadwal</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-    textarea { width: 100%; padding: 10px; margin-bottom: 10px; }
-    button { padding: 10px 20px; font-size: 16px; }
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; }
+    h1 { text-align: center; }
+    nav { display: flex; justify-content: center; margin-bottom: 20px; }
+    nav button { margin: 0 5px; padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; background: #007bff; color: white; }
+    nav button.active { background: #0056b3; }
+    .tab { display: none; }
+    .tab.active { display: block; }
+    textarea, input, select { width: 100%; padding: 10px; margin-bottom: 10px; }
+    button.submit { padding: 10px 20px; font-size: 16px; background: green; color: white; border: none; border-radius: 5px; cursor: pointer; }
     #message { color: green; margin-top: 10px; }
     #error { color: red; margin-top: 10px; }
+    pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; max-height: 300px; overflow: auto; }
   </style>
 </head>
 <body>
-  <h1>📝 Tambah Catatan</h1>
-  <form id="noteForm">
-    <textarea id="note" placeholder="Tulis catatan di sini..." required></textarea><br>
-    <button type="submit">Simpan</button>
-  </form>
+  <h1>📑 Sistem Catatan & Jadwal</h1>
+  <nav>
+    <button data-tab="noteTab" class="active">Tambah Catatan</button>
+    <button data-tab="scheduleTab">Tambah Jadwal</button>
+    <button data-tab="viewTab">Lihat Data</button>
+  </nav>
+
+  <!-- Catatan -->
+  <div id="noteTab" class="tab active">
+    <h2>📝 Tambah Catatan</h2>
+    <form id="noteForm">
+      <textarea id="note" placeholder="Tulis catatan di sini..." required></textarea><br>
+      <button type="submit" class="submit">Simpan</button>
+    </form>
+  </div>
+
+  <!-- Jadwal -->
+  <div id="scheduleTab" class="tab">
+    <h2>⏰ Tambah Jadwal</h2>
+    <form id="scheduleForm">
+      <input type="datetime-local" id="datetime" required><br>
+      <textarea id="schedule" placeholder="Tulis jadwal di sini..." required></textarea><br>
+      <input type="url" id="callback" placeholder="Opsional: URL callback"><br>
+      <button type="submit" class="submit">Simpan</button>
+    </form>
+  </div>
+
+  <!-- Lihat Data -->
+  <div id="viewTab" class="tab">
+    <h2>📖 Lihat Data</h2>
+    <input type="text" id="search" placeholder="Cari catatan/jadwal..."><br>
+    <button id="loadNotes" class="submit">Muat Semua</button>
+    <pre id="output"></pre>
+  </div>
+
   <div id="message"></div>
   <div id="error"></div>
 
   <script>
-    const form = document.getElementById('noteForm');
-    const message = document.getElementById('message');
-    const errorDiv = document.getElementById('error');
-    const apiUrl = '/note'; // otomatis ke Netlify Function note.js
+    const apiUrl = '/note'; // otomatis ke Netlify Function
 
-    form.addEventListener('submit', async (e) => {
+    // --- Tab Navigation ---
+    document.querySelectorAll("nav button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    // --- Form Catatan ---
+    document.getElementById('noteForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const note = document.getElementById('note').value.trim();
-      message.textContent = 'Mengirim...';
-      errorDiv.textContent = '';
+      sendData({ type: "note", content: document.getElementById('note').value.trim() });
+      e.target.reset();
+    });
 
+    // --- Form Jadwal ---
+    document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      sendData({
+        type: "schedule",
+        datetime: document.getElementById('datetime').value,
+        content: document.getElementById('schedule').value.trim(),
+        callback: document.getElementById('callback').value.trim()
+      });
+      e.target.reset();
+    });
+
+    // --- Ambil Data ---
+    document.getElementById('loadNotes').addEventListener('click', async () => {
+      const keyword = document.getElementById('search').value.trim();
+      const url = keyword ? `${apiUrl}?search=${encodeURIComponent(keyword)}` : apiUrl;
       try {
-        const formData = new URLSearchParams();
-        formData.append('note', note);
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData.toString()
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.status === 'success') {
-          message.textContent = '✅ Catatan berhasil disimpan!';
-          form.reset();
-        } else {
-          errorDiv.textContent = `⚠️ Gagal menyimpan: ${data.error || 'Unknown error'}`;
-        }
+        const res = await fetch(url);
+        const data = await res.json();
+        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        errorDiv.textContent = `❌ Error: ${err.message}`;
+        document.getElementById('output').textContent = "❌ Error: " + err.message;
       }
     });
+
+    // --- Helper: kirim POST ---
+    async function sendData(obj) {
+      const message = document.getElementById('message');
+      const errorDiv = document.getElementById('error');
+      message.textContent = "Mengirim...";
+      errorDiv.textContent = "";
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(obj)
+        });
+        const data = await res.json();
+        if (res.ok && data.status === "success") {
+          message.textContent = "✅ Berhasil disimpan!";
+        } else {
+          errorDiv.textContent = "⚠️ Gagal: " + (data.error || "Unknown");
+        }
+      } catch (err) {
+        errorDiv.textContent = "❌ Error: " + err.message;
+      }
+    }
   </script>
 </body>
 </html>
