@@ -17,6 +17,8 @@ let keyIndex = 0;
 
 const models = [
   // Tier 1: paling heavy hitter
+  "google/gemini-2.0-flash-exp:free",            // super panjang context, vision
+  "x-ai/grok-4-fast:free",
   "qwen/qwen3-coder:free",                       // 480B coder, huge context
   "qwen/qwen3-235b-a22b:free",                   // 235B
   "meta-llama/llama-4-maverick:free",            // Llama 4 top tier
@@ -57,7 +59,6 @@ const models = [
   "microsoft/mai-ds-r1:free",
 
   // Tier 4: vendor lain / specialized
-  "google/gemini-2.0-flash-exp:free",            // super panjang context, vision
   "google/gemma-3-27b-it:free",
   "google/gemma-3-12b-it:free",
   "google/gemma-3-4b-it:free",
@@ -72,7 +73,6 @@ const models = [
   "arliai/qwq-32b-arliai-rpr-v1:free",
   "agentica-org/deepcoder-14b-preview:free",
   "nousresearch/deephermes-3-llama-3-8b-preview:free",
-  "x-ai/grok-4-fast:free",
   "tencent/hunyuan-a13b-instruct:free",
   "venice: uncensored dolphin", // alias cognitivecomputations
 ];
