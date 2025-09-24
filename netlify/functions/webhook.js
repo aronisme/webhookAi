@@ -344,7 +344,7 @@ Gaya komunikasi:
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`    },  
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`    },  
                      {
                     role: "user",
                     content: [
@@ -437,7 +437,7 @@ Gaya komunikasi:
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`            },
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`            },
             {
               role: "user",
               content: contextText
@@ -494,7 +494,7 @@ Gaya komunikasi:
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`              },
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`              },
                 {
                   role: "user",
                   content: contextText
