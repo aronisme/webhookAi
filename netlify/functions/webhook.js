@@ -16,26 +16,90 @@ const apiKeys = [
 let keyIndex = 0;
 
 const models = [
-  "google/gemini-2.0-flash-exp:free",   // support vision
-  "mistralai/mistral-small-3.1-24b-instruct:free",
-  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-  "meta-llama/llama-4-maverick:free",
+  // Tier 1: paling heavy hitter
+  "qwen/qwen3-coder:free",                       // 480B coder, huge context
+  "qwen/qwen3-235b-a22b:free",                   // 235B
+  "meta-llama/llama-4-maverick:free",            // Llama 4 top tier
   "meta-llama/llama-4-scout:free",
-  "moonshotai/kimi-vl-a3b-thinking:free", // support vision
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "shisa-ai/shisa-v2-llama3.3-70b:free",
+  "deepseek/deepseek-r1-distill-llama-70b:free",
+  "moonshotai/kimi-dev-72b:free",
+  "qwen/qwen-2.5-72b-instruct:free",
+  "qwen/qwen2.5-vl-72b-instruct:free",           // vision
+  "moonshotai/kimi-vl-a3b-thinking:free",        // vision + reasoning
+
+  // Tier 2: besar menengah
+  "qwen/qwen3-30b-a3b:free",
+  "qwen/qwen3-14b:free",
+  "qwen/qwen3-8b:free",
+  "qwen/qwen3-4b:free",
+  "meta-llama/llama-3.3-8b-instruct:free",
+  "meta-llama/llama-3.2-3b-instruct:free",
   "mistralai/mistral-small-3.2-24b-instruct:free",
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "mistralai/mistral-nemo:free",
+  "mistralai/mistral-7b-instruct:free",
+  "mistralai/mistral-small-24b-instruct-2501:free",
+  "mistralai/devstral-small-2505:free",
+  "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
+  "cognitivecomputations/dolphin3.0-mistral-24b:free",
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+
+  // Tier 3: eksperimental, reasoning & R1 variants
+  "deepseek/deepseek-r1:free",
+  "deepseek/deepseek-r1-0528:free",
+  "deepseek/deepseek-r1-0528-qwen3-8b:free",
+  "deepseek/deepseek-chat-v3.1:free",
+  "deepseek/deepseek-chat-v3-0324:free",
+  "tngtech/deepseek-r1t-chimera:free",
+  "tngtech/deepseek-r1t2-chimera:free",
+  "microsoft/mai-ds-r1:free",
+
+  // Tier 4: vendor lain / specialized
+  "google/gemini-2.0-flash-exp:free",            // super panjang context, vision
+  "google/gemma-3-27b-it:free",
+  "google/gemma-3-12b-it:free",
+  "google/gemma-3-4b-it:free",
+  "google/gemma-2-9b-it:free",
+  "google/gemma-3n-e4b-it:free",
+  "google/gemma-3n-e2b-it:free",
+  "nvidia/nemotron-nano-9b-v2:free",
+  "openai/gpt-oss-120b:free",
+  "openai/gpt-oss-20b:free",
+  "z-ai/glm-4.5-air:free",
+  "moonshotai/kimi-k2:free",
+  "arliai/qwq-32b-arliai-rpr-v1:free",
+  "agentica-org/deepcoder-14b-preview:free",
+  "nousresearch/deephermes-3-llama-3-8b-preview:free",
   "x-ai/grok-4-fast:free",
+  "tencent/hunyuan-a13b-instruct:free",
+  "venice: uncensored dolphin", // alias cognitivecomputations
 ];
+
 
 // alias → model
 const modelAliases = {
-  dolphin: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   gemini: "google/gemini-2.0-flash-exp:free",
-  mistral31: "mistralai/mistral-small-3.1-24b-instruct:free",
   maverick: "meta-llama/llama-4-maverick:free",
   scout: "meta-llama/llama-4-scout:free",
   kimi: "moonshotai/kimi-vl-a3b-thinking:free",
+  mistral31: "mistralai/mistral-small-3.1-24b-instruct:free",
   mistral32: "mistralai/mistral-small-3.2-24b-instruct:free",
-  grok: "x-ai/grok-4-fast:free"
+  mistral7b: "mistralai/mistral-7b-instruct:free",
+  dolphin: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  dolphin3: "cognitivecomputations/dolphin3.0-mistral-24b:free",
+  grok: "x-ai/grok-4-fast:free",
+  qwen480: "qwen/qwen3-coder:free",
+  qwen235: "qwen/qwen3-235b-a22b:free",
+  llama70: "meta-llama/llama-3.3-70b-instruct:free",
+  llama8: "meta-llama/llama-3.3-8b-instruct:free",
+  llama3b: "meta-llama/llama-3.2-3b-instruct:free",
+  gemma27: "google/gemma-3-27b-it:free",
+  gemma12: "google/gemma-3-12b-it:free",
+  gemma4: "google/gemma-3-4b-it:free",
+  gemma9: "google/gemma-2-9b-it:free",
+  nemotron: "nvidia/nemotron-nano-9b-v2:free",
 };
 
 // ✅ Fungsi helper baru: dapatkan alias pendek
