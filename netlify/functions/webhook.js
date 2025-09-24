@@ -16,66 +16,49 @@ const apiKeys = [
 let keyIndex = 0;
 
 const models = [
-  // Tier 1: paling heavy hitter
-  "google/gemini-2.0-flash-exp:free",            // super panjang context, vision
+  "google/gemini-2.0-flash-exp:free",   // support vision
   "x-ai/grok-4-fast:free",
-  "qwen/qwen3-coder:free",                       // 480B coder, huge context
-  "qwen/qwen3-235b-a22b:free",                   // 235B
-  "meta-llama/llama-4-maverick:free",            // Llama 4 top tier
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
+  "moonshotai/kimi-vl-a3b-thinking:free", // support vision
+  "mistralai/mistral-small-3.2-24b-instruct:free",
+ 
+
+  // lanjut model lain sesuai tier
+  "qwen/qwen3-coder:free",
+  "qwen/qwen3-235b-a22b:free",
+  "moonshotai/kimi-dev-72b:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "shisa-ai/shisa-v2-llama3.3-70b:free",
   "deepseek/deepseek-r1-distill-llama-70b:free",
-  "moonshotai/kimi-dev-72b:free",
+  "qwen/qwen2.5-vl-72b-instruct:free",
   "qwen/qwen-2.5-72b-instruct:free",
-  "qwen/qwen2.5-vl-72b-instruct:free",           // vision
-  "moonshotai/kimi-vl-a3b-thinking:free",        // vision + reasoning
-
-  // Tier 2: besar menengah
-  "qwen/qwen3-30b-a3b:free",
-  "qwen/qwen3-14b:free",
-  "qwen/qwen3-8b:free",
-  "qwen/qwen3-4b:free",
-  "meta-llama/llama-3.3-8b-instruct:free",
-  "meta-llama/llama-3.2-3b-instruct:free",
-  "mistralai/mistral-small-3.2-24b-instruct:free",
-  "mistralai/mistral-small-3.1-24b-instruct:free",
   "mistralai/mistral-nemo:free",
   "mistralai/mistral-7b-instruct:free",
-  "mistralai/mistral-small-24b-instruct-2501:free",
-  "mistralai/devstral-small-2505:free",
   "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
-  "cognitivecomputations/dolphin3.0-mistral-24b:free",
-  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-
-  // Tier 3: eksperimental, reasoning & R1 variants
   "deepseek/deepseek-r1:free",
   "deepseek/deepseek-r1-0528:free",
-  "deepseek/deepseek-r1-0528-qwen3-8b:free",
   "deepseek/deepseek-chat-v3.1:free",
   "deepseek/deepseek-chat-v3-0324:free",
   "tngtech/deepseek-r1t-chimera:free",
   "tngtech/deepseek-r1t2-chimera:free",
   "microsoft/mai-ds-r1:free",
-
-  // Tier 4: vendor lain / specialized
   "google/gemma-3-27b-it:free",
   "google/gemma-3-12b-it:free",
   "google/gemma-3-4b-it:free",
   "google/gemma-2-9b-it:free",
-  "google/gemma-3n-e4b-it:free",
-  "google/gemma-3n-e2b-it:free",
-  "nvidia/nemotron-nano-9b-v2:free",
   "openai/gpt-oss-120b:free",
   "openai/gpt-oss-20b:free",
+  "nvidia/nemotron-nano-9b-v2:free",
   "z-ai/glm-4.5-air:free",
-  "moonshotai/kimi-k2:free",
+  "tencent/hunyuan-a13b-instruct:free",
   "arliai/qwq-32b-arliai-rpr-v1:free",
   "agentica-org/deepcoder-14b-preview:free",
   "nousresearch/deephermes-3-llama-3-8b-preview:free",
-  "tencent/hunyuan-a13b-instruct:free",
-  "venice: uncensored dolphin", // alias cognitivecomputations
 ];
+
 
 
 // alias → model
