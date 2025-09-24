@@ -128,6 +128,36 @@ async function callGemini(model, messages) {
   return null;
 }
 
+async function callHelperAI(messages) {
+  for (let i = 0; i < apiKeys.length; i++) {
+    const apiKey = apiKeys[keyIndex];
+    keyIndex = (keyIndex + 1) % apiKeys.length;
+
+    try {
+      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "mistralai/mistral-small-3.2-24b-instruct:free",
+          messages,
+        }),
+      });
+
+      const data = await resp.json();
+      if (data?.choices?.[0]?.message?.content) {
+        return data.choices[0].message.content.trim();
+      }
+    } catch (err) {
+      console.error("Helper AI error:", err.message);
+    }
+  }
+  return null;
+}
+
+
 // ✅ 2 & 3. Prompt baru + logika action
 async function handleNoteCommand(chatId, text) {
   try {
@@ -154,15 +184,26 @@ Catatan:
 Pesan: "${text}"
     `.trim();
 
-    const result = await withTimeout(callGemini("gemini-1.5-flash", [
-      { role: "user", parts: [{ text: helperPrompt }] }
-    ]), 5000);
+    const result = await withTimeout(
+  callHelperAI([
+    { role: "user", content: helperPrompt }
+  ]),
+  5000
+);
+console.log("Helper AI raw result:", result);
 
-    if (!result || result.trim() === "PASS") {
-      return false;
-    }
+if (!result || result.trim() === "PASS") {
+  return false;
+}
 
-    console.log("Gemini raw result:", result);
+if (!result.trim().startsWith("{")) {
+  return false; // buang kalau bukan JSON
+}
+
+
+
+console.log("Helper AI raw result:", result);
+
 
     const parsed = JSON.parse(result);
 
