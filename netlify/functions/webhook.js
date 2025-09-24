@@ -45,9 +45,9 @@ function getAlias(model) {
 
 // ===== Gemini keys & models =====
 const geminiKeys = [
-  process.env.GEMINI_KEY1,
-  process.env.GEMINI_KEY2,
-  process.env.GEMINI_KEY3,
+  process.env.GEMINI_KEY1a,
+  process.env.GEMINI_KEY2a,
+  process.env.GEMINI_KEY3a,
 ].filter(Boolean);
 let geminiIndex = 0;
 
