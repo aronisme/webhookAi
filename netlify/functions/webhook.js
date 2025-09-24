@@ -128,22 +128,30 @@ async function callGemini(model, messages) {
   return null;
 }
 
-// ✅ 3. Fungsi handleNoteCommand diperbarui
+// ✅ 2 & 3. Prompt baru + logika action
 async function handleNoteCommand(chatId, text) {
   try {
     const { tanggal, jam, waktu } = getWIBTimeInfo();
     const helperPrompt = `
 Sekarang ${tanggal}, jam ${jam}, masih ${waktu} (WIB).
 
-Kamu adalah AI pembantu parsing perintah.
-- Balas HANYA JSON valid tanpa tambahan teks.
-- Format:
-  {"type":"note","content":"..."}
-  {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
-  {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
-- Jika tidak cocok → balas hanya: PASS.
+Kamu adalah AI parser perintah catatan/jadwal/event.
+Balas HANYA dengan:
+1. JSON valid salah satu:
+   {"action":"add","type":"note","content":"..."}
+   {"action":"add","type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
+   {"action":"add","type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
+   {"action":"edit","id":"<id>","content":"..."} 
+   {"action":"delete","id":"<id>"}
+2. Atau string "PASS".
 
-Pesan: ${text}
+Catatan:
+- Gunakan "add" untuk perintah baru.
+- Gunakan "edit" kalau user minta ubah detil catatan/jadwal yang sudah ada.
+- Gunakan "delete" kalau user mau hapus.
+- Jangan tulis teks lain di luar JSON/PASS.
+
+Pesan: "${text}"
     `.trim();
 
     const result = await withTimeout(callGemini("gemini-1.5-flash", [
@@ -156,21 +164,58 @@ Pesan: ${text}
 
     console.log("Gemini raw result:", result);
 
-    const body = JSON.parse(result);
+    const parsed = JSON.parse(result);
 
-    const response = await fetch(NOTE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    // ✅ 3. Tambah logika berdasarkan action
+    let response, respText;
 
-    const respText = await response.text();
-    console.log("NOTE_API response:", response.status, respText);
+    if (parsed.action === "add") {
+      response = await fetch(NOTE_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      respText = await response.text();
+      console.log("NOTE_API [ADD] response:", response.status, respText);
 
-    if (response.ok) {
-      await sendMessage(chatId, "✅ Oke Boss, sudah aku catat/jadwalkan!");
+      if (response.ok) {
+        await sendMessage(chatId, "✅ Oke Boss, sudah aku catat/jadwalkan!");
+      } else {
+        await sendMessage(chatId, "⚠️ Boss, gagal simpan ke catatan/jadwal.");
+      }
+
+    } else if (parsed.action === "edit") {
+      response = await fetch(NOTE_API, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      const resultJson = await response.json();
+      console.log("NOTE_API [EDIT] response:", response.status, resultJson);
+
+      if (resultJson.status === "success") {
+        await sendMessage(chatId, `✏️ Oke Boss, catatan #${parsed.id} sudah diupdate.`);
+      } else {
+        await sendMessage(chatId, "⚠️ Boss, gagal edit catatan.");
+      }
+
+    } else if (parsed.action === "delete") {
+      response = await fetch(NOTE_API, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      const resultJson = await response.json();
+      console.log("NOTE_API [DELETE] response:", response.status, resultJson);
+
+      if (resultJson.status === "success") {
+        await sendMessage(chatId, `🗑️ Catatan #${parsed.id} sudah dihapus, Boss.`);
+      } else {
+        await sendMessage(chatId, "⚠️ Boss, gagal hapus catatan.");
+      }
+
     } else {
-      await sendMessage(chatId, "⚠️ Boss, gagal simpan ke catatan/jadwal.");
+      return false;
     }
 
     return true;
