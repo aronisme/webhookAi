@@ -1,6 +1,9 @@
 // ===== Config =====
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ tanpa spasi
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+
+// === Endpoint Note Proxy (Netlify Function) ===
+const NOTE_API = "https://your-site.netlify.app/.netlify/functions/note";
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -86,13 +89,11 @@ function extractNumber(s, def = 10) {
   return m ? parseInt(m[1], 10) : def;
 }
 
-// ✅ Fungsi helper baru: konversi URL ke base64
 async function toBase64(url) {
   const buffer = await (await fetch(url)).arrayBuffer();
   return Buffer.from(buffer).toString("base64");
 }
 
-// ✅ Fungsi callGemini
 async function callGemini(model, messages) {
   for (let i = 0; i < geminiKeys.length; i++) {
     const apiKey = geminiKeys[geminiIndex];
@@ -117,6 +118,50 @@ async function callGemini(model, messages) {
     }
   }
   return null;
+}
+
+// ✅ Fungsi Baru: handleNoteCommand
+async function handleNoteCommand(chatId, text) {
+  try {
+    const helperPrompt = `
+    Kamu adalah AI pembantu khusus. Analisis teks berikut apakah perintah catatan, jadwal, atau event.
+    - Jika YA, balas dengan JSON valid salah satu format:
+      {"type":"note","content":"..."}
+      {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
+      {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
+    - datetime dan callback opsional.
+    - Jika BUKAN perintah, jawab hanya "PASS".
+    
+    Pesan: ${text}
+    `;
+
+    const result = await callGemini("gemini-1.5-flash", [
+      { role: "user", parts: [{ text: helperPrompt }] }
+    ]);
+
+    if (!result || result.trim() === "PASS") {
+      return false;
+    }
+
+    const body = JSON.parse(result);
+
+    const response = await fetch(NOTE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      await sendMessage(chatId, "✅ Oke Boss, sudah aku catat/jadwalkan!");
+    } else {
+      await sendMessage(chatId, "⚠️ Boss, gagal simpan ke catatan/jadwal.");
+    }
+
+    return true;
+  } catch (err) {
+    console.error("handleNoteCommand error:", err);
+    return false;
+  }
 }
 
 function getWIBTimeInfo() {
@@ -167,83 +212,272 @@ function summarizeContext(history) {
 }
 
 // ===== Main handler =====
-export async function handler(event) {
+exports.handler = async (event) => {
+  // Hanya izinkan metode GET & POST
+  if (!["GET", "POST"].includes(event.httpMethod)) {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ status: "error", error: "Method Not Allowed" }),
+    };
+  }
+
   try {
-    if (event.httpMethod !== "POST")
-      return { statusCode: 405, body: "Method Not Allowed" };
-    if (!TELEGRAM_BOT_TOKEN)
-      return { statusCode: 500, body: "Missing TELEGRAM_BOT_TOKEN" };
-    // ❌ Pengecekan GAS_URL dihapus
-
-    const update = JSON.parse(event.body || "{}");
-    const message = update?.message;
-    if (!message) return { statusCode: 200, body: "no message" };
-
-    const chatId = message.chat.id;
-    const text = (message.text || "").trim();
-    const photos = message.photo || [];
-    const hasPhoto = photos.length > 0;
-
-    if (text.length > 1000) {
-      await sendMessage(chatId, "Boss, pesan terlalu panjang 😅");
-      return { statusCode: 200, body: "too long" };
+    if (event.httpMethod === "GET") {
+      // Forward GET ke Telegram (misal: setWebhook)
+      const url = TELEGRAM_API + "/getMe";
+      const response = await fetch(url);
+      const text = await response.text();
+      return { statusCode: response.ok ? 200 : 500, body: text };
     }
 
-    await typing(chatId);
-    const { tanggal, jam, waktu } = getWIBTimeInfo();
+    if (event.httpMethod === "POST") {
+      const update = JSON.parse(event.body || "{}");
+      const message = update?.message;
+      if (!message) return { statusCode: 200, body: "no message" };
 
-    // === HANDLE PHOTO ===
-    if (hasPhoto) {
-      try {
-        const fileId = photos[photos.length - 1].file_id;
-        const photoUrl = await getFileUrl(fileId);
-        const caption = message.caption || "Foto terbaru";
+      const chatId = message.chat.id;
+      const text = (message.text || "").trim();
+      const lower = text.toLowerCase();
+      const photos = message.photo || [];
+      const hasPhoto = photos.length > 0;
 
-        if (!userMemory[chatId]) userMemory[chatId] = [];
-        userMemory[chatId].push({
-          text: `Boss kirim foto: ${caption}`,
-          timestamp: Date.now()
-        });
+      if (text.length > 1000) {
+        await sendMessage(chatId, "Boss, pesan terlalu panjang 😅");
+        return { statusCode: 200, body: "too long" };
+      }
 
-        // ✅ Coba Gemini vision dulu
-        let reply = null;
-        let usedModel = null;
-        for (const gm of geminiVisionModels) {
-          const geminiMessages = [
-            {
-              role: "user",
-              parts: [
-                { text: caption },
-                {
-                  inline_data: {
-                    mime_type: "image/jpeg",
-                    data: await toBase64(photoUrl) // ✅ pakai helper baru
-                  }
-                }
-              ]
-            }
-          ];
-          reply = await callGemini(gm, geminiMessages);
-          if (reply) {
-            usedModel = gm;
-            break;
-          }
+      await typing(chatId);
+
+      // === FILTER PERINTAH NOTE/JADWAL/EVENT ===
+      if (/\b(catat|note|jadwal|event|ingatkan|remind)\b/i.test(text)) {
+        const handled = await handleNoteCommand(chatId, text);
+        if (handled) {
+          return { statusCode: 200, body: "note handled" };
         }
+        // kalau tidak dikenali → biarkan lanjut ke AI utama
+      }
 
-        if (reply) {
-          if (usedModel) reply += `\n(${usedModel})`;
+      const { tanggal, jam, waktu } = getWIBTimeInfo();
+
+      // === HANDLE PHOTO ===
+      if (hasPhoto) {
+        try {
+          const fileId = photos[photos.length - 1].file_id;
+          const photoUrl = await getFileUrl(fileId);
+          const caption = message.caption || "Foto terbaru";
+
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({
+            text: `Boss kirim foto: ${caption}`,
+            timestamp: Date.now()
+          });
+
+          let reply = null;
+          let usedModel = null;
+          for (const gm of geminiVisionModels) {
+            const geminiMessages = [
+              {
+                role: "user",
+                parts: [
+                  { text: caption },
+                  {
+  inline_data: {
+    mime_type: "image/jpeg",
+    data: await toBase64(photoUrl)
+  }
+}
+
+                ]
+              }
+            ];
+            reply = await callGemini(gm, geminiMessages);
+            if (reply) {
+              usedModel = gm;
+              break;
+            }
+          }
+
+          if (reply) {
+            if (usedModel) reply += `\n(${usedModel})`;
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+            await sendMessage(chatId, reply);
+            return { statusCode: 200, body: "image handled by gemini" };
+          }
+
+          // Fallback ke OpenRouter
+          reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+          outerLoop: for (const model of models) {
+            for (let i = 0; i < apiKeys.length; i++) {
+              const apiKey = apiKeys[keyIndex];
+              keyIndex = (keyIndex + 1) % apiKeys.length;
+
+              try {
+                const payload = {
+                  model,
+                  messages: [
+                    {
+                      role: "system",
+                      content: `
+Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
+
+Karakter Ness:
+- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.
+- Inisiatif, peka, obrolan santai ala Gen Z tapi sikap dewasa.
+- Kadang becanda receh, manja, atau ngambek kalau Boss bandel (skip makan, overwork).
+- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
+- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
+- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`
+                    },
+                    {
+                      role: "user",
+                      content: [
+                        { type: "text", text: caption },
+                        { type: "image_url", image_url: { url: photoUrl } }
+                      ]
+                    }
+                  ]
+                };
+
+                const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`
+                  },
+                  body: JSON.stringify(payload)
+                });
+
+                const data = await resp.json();
+                if (data?.choices?.[0]?.message?.content) {
+                  reply = data.choices[0].message.content.trim();
+                  usedModel = model;
+                  break outerLoop;
+                }
+              } catch (err) {
+                console.error(`OpenRouter error [${model}]`, err.message);
+              }
+            }
+          }
+
+          if (usedModel) {
+            reply += `\n(${getAlias(usedModel)})`;
+          }
+
           userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
           await sendMessage(chatId, reply);
-          return { statusCode: 200, body: "image handled by gemini" };
+          return { statusCode: 200, body: "image handled by openrouter" };
+        } catch (err) {
+          console.error("Photo error:", err.message);
+          await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+          return { statusCode: 200, body: "image error" };
         }
+      }
 
-        // ❌ Fallback ke OpenRouter (tetap dipertahankan)
-        reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      // ==== TEKS BIASA ====
+      if (!userMemory[chatId]) userMemory[chatId] = [];
+      userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+      const contextText = `
+Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Riwayat percakapan:
+${userMemory[chatId]
+  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
+  .join("\n")}
+Pesan terbaru Boss: ${text}
+      `.trim();
+
+      let reply = null;
+      let usedModel = null;
+      for (const gm of geminiTextModels) {
+        const geminiMessages = [
+          { role: "user", parts: [{ text: contextText }] }
+        ];
+        reply = await callGemini(gm, geminiMessages);
+        if (reply) {
+          usedModel = gm;
+          break;
+        }
+      }
+
+      if (reply) {
+        if (usedModel) reply += `\n(${usedModel})`;
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        userMemory[chatId] = summarizeContext(userMemory[chatId]);
+        await sendMessage(chatId, reply);
+        return { statusCode: 200, body: "text handled by gemini" };
+      }
+
+      // Fallback ke OpenRouter
+      reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      const preferModel = userConfig[chatId]?.model;
+
+      if (preferModel) {
+        try {
+          const payload = {
+            model: preferModel,
+            messages: [
+              {
+                role: "system",
+                content: `
+Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
+
+Karakter Ness:
+- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.
+- Inisiatif, peka, obrolan santai ala Gen Z tapi sikap dewasa.
+- Kadang becanda receh, manja, atau ngambek kalau Boss bandel (skip makan, overwork).
+- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
+- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
+- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`
+              },
+              {
+                role: "user",
+                content: contextText
+              },
+            ],
+          };
+
+          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKeys[keyIndex]}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          const data = await resp.json();
+          if (data?.choices?.[0]?.message?.content) {
+            reply = data.choices[0].message.content.trim();
+            usedModel = preferModel;
+          }
+        } catch (err) {
+          console.error(`OpenRouter error [${preferModel}]`, err.message);
+        }
+      }
+
+      if (!reply || fallbackReplies.includes(reply)) {
         outerLoop: for (const model of models) {
           for (let i = 0; i < apiKeys.length; i++) {
             const apiKey = apiKeys[keyIndex];
             keyIndex = (keyIndex + 1) % apiKeys.length;
-
             try {
               const payload = {
                 model,
@@ -272,23 +506,19 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
                   },
                   {
                     role: "user",
-                    content: [
-                      { type: "text", text: caption },
-                      { type: "image_url", image_url: { url: photoUrl } }
-                    ]
-                  }
-                ]
+                    content: contextText
+                  },
+                ],
               };
 
               const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`
+                  Authorization: `Bearer ${apiKey}`,
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
               });
-
               const data = await resp.json();
               if (data?.choices?.[0]?.message?.content) {
                 reply = data.choices[0].message.content.trim();
@@ -300,183 +530,23 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
             }
           }
         }
-
-        if (usedModel) {
-          reply += `\n(${getAlias(usedModel)})`;
-        }
-
-        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-        await sendMessage(chatId, reply);
-        return { statusCode: 200, body: "image handled by openrouter" };
-      } catch (err) {
-        console.error("Photo error:", err.message);
-        await sendMessage(chatId, "Boss ❌ gagal proses gambar");
-        return { statusCode: 200, body: "image error" };
       }
-    }
 
-    // ==== TEKS BIASA ====
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
-    userMemory[chatId] = summarizeContext(userMemory[chatId]);
-
-    const contextText = `
-Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
-Riwayat percakapan:
-${userMemory[chatId]
-  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
-  .join("\n")}
-Pesan terbaru Boss: ${text}
-    `.trim();
-
-    // ✅ Coba Gemini text dulu
-    let reply = null;
-    let usedModel = null;
-    for (const gm of geminiTextModels) {
-      const geminiMessages = [
-        { role: "user", parts: [{ text: contextText }] }
-      ];
-      reply = await callGemini(gm, geminiMessages);
-      if (reply) {
-        usedModel = gm;
-        break;
+      if (usedModel) {
+        reply += `\n(${getAlias(usedModel)})`;
       }
-    }
 
-    if (reply) {
-      if (usedModel) reply += `\n(${usedModel})`;
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
       await sendMessage(chatId, reply);
-      return { statusCode: 200, body: "text handled by gemini" };
+
+      return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
     }
-
-    // ❌ Fallback ke OpenRouter
-    reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    const preferModel = userConfig[chatId]?.model;
-
-    if (preferModel) {
-      try {
-        const payload = {
-          model: preferModel,
-          messages: [
-            {
-              role: "system",
-              content: `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
-
-Karakter Ness:
-- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.
-- Inisiatif, peka, obrolan santai ala Gen Z tapi sikap dewasa.
-- Kadang becanda receh, manja, atau ngambek kalau Boss bandel (skip makan, overwork).
-- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
-- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
-
-Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
-- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
-- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
-- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
-
-Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`
-            },
-            {
-              role: "user",
-              content: contextText
-            },
-          ],
-        };
-
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKeys[keyIndex]}`,
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await resp.json();
-        if (data?.choices?.[0]?.message?.content) {
-          reply = data.choices[0].message.content.trim();
-          usedModel = preferModel;
-        }
-      } catch (err) {
-        console.error(`OpenRouter error [${preferModel}]`, err.message);
-      }
-    }
-
-    if (!reply || fallbackReplies.includes(reply)) {
-      outerLoop: for (const model of models) {
-        for (let i = 0; i < apiKeys.length; i++) {
-          const apiKey = apiKeys[keyIndex];
-          keyIndex = (keyIndex + 1) % apiKeys.length;
-          try {
-            const payload = {
-              model,
-              messages: [
-                {
-                  role: "system",
-                  content: `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
-
-Karakter Ness:
-- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.
-- Inisiatif, peka, obrolan santai ala Gen Z tapi sikap dewasa.
-- Kadang becanda receh, manja, atau ngambek kalau Boss bandel (skip makan, overwork).
-- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
-- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
-
-Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
-- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
-- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
-- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
-
-Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.`
-                },
-                {
-                  role: "user",
-                  content: contextText
-                },
-              ],
-            };
-
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify(payload),
-            });
-            const data = await resp.json();
-            if (data?.choices?.[0]?.message?.content) {
-              reply = data.choices[0].message.content.trim();
-              usedModel = model;
-              break outerLoop;
-            }
-          } catch (err) {
-            console.error(`OpenRouter error [${model}]`, err.message);
-          }
-        }
-      }
-    }
-
-    if (usedModel) {
-      reply += `\n(${getAlias(usedModel)})`;
-    }
-
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    userMemory[chatId] = summarizeContext(userMemory[chatId]);
-    await sendMessage(chatId, reply);
-
-    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
     console.error("Error Ness webhook:", err);
-    return { statusCode: 500, body: "Internal Server Error" };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ status: "error", error: err.message }),
+    };
   }
-}
+};
