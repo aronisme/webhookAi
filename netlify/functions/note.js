@@ -1,7 +1,7 @@
 // netlify/functions/note.js
 
 const gasUrl =
-  "https://script.google.com/macros/s/AKfycbzd07FBJEg9iNplv35zF5ZXC_95wioB_uElRQCvdMBj7ZHLNJW1VCtvP99jPTGYzjAP/exec";
+  "https://script.google.com/macros/s/AKfycbw3ip8m4J1OfOckfsVp4jwIOi6pKF36o27Y1OGuwtJ2BIqdCmtYI6bcExzalh7mMzo/exec";
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ status: "error", error: "Method Not Allowed" }) };
