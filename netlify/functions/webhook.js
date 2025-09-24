@@ -52,8 +52,9 @@ const geminiKeys = [
 let geminiIndex = 0;
 
 const geminiTextModels = [
-  "gemini-1.5-flash",
+  "gemini-2.0-flash-exp",
   "gemini-1.5-flash-latest",
+  "gemini-1.5-flash",
 ];
 const geminiVisionModels = [
   "gemini-1.5-flash",
