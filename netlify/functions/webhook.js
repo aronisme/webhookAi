@@ -116,7 +116,7 @@ function getWIBTimeInfo() {
 }
 
 // ===== Memory crumbs =====
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 30;
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
 const userMemory = {};   // simpan history percakapan
 const userConfig = {};   // simpan preferensi model per user
 const fallbackReplies = [
@@ -388,6 +388,7 @@ Gaya komunikasi:
 - Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
@@ -481,6 +482,7 @@ Gaya komunikasi:
 - Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
@@ -538,6 +540,7 @@ Gaya komunikasi:
 - Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
