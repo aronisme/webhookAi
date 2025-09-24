@@ -124,16 +124,18 @@ async function callGemini(model, messages) {
 async function handleNoteCommand(chatId, text) {
   try {
     const helperPrompt = `
-    Kamu adalah AI pembantu khusus. Analisis teks berikut apakah perintah catatan, jadwal, atau event.
-    - Jika YA, balas dengan JSON valid salah satu format:
-      {"type":"note","content":"..."}
-      {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
-      {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
-    - datetime dan callback opsional.
-    - Jika BUKAN perintah, jawab hanya "PASS".
-    
-    Pesan: ${text}
-    `;
+Kamu adalah AI pembantu parsing perintah.
+- Tugasmu hanya keluarkan JSON valid sesuai perintah, tanpa tambahan teks, tanpa penjelasan.
+- Format:
+  {"type":"note","content":"..."}
+  {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
+  {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
+- Jangan jawab dengan kalimat biasa.
+- Jika tidak cocok → balas hanya: PASS.
+
+Pesan: ${text}
+`;
+
 
     const result = await callGemini("gemini-1.5-flash", [
       { role: "user", parts: [{ text: helperPrompt }] }
