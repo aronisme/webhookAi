@@ -1,4 +1,4 @@
-const gasUrl = "https://script.google.com/macros/s/AKfycbzH2e5az5nly_TrmT2vy29lrb_nAh7Zb3fQjk5g_HNj6WZe8qjNBtPTifgesiBCmxwx/exec?auth=MYSECRET123";
+const gasUrl = "https://script.google.com/macros/s/AKfycbwIQnuu0r1FzTldR6D8tkWh9q_9xJMtlqrepLWhw6ln5h3wiHT97jZDUBV06omqnPrR/exec?auth=MYSECRET123";
 
 exports.handler = async (event) => {
   if (event.httpMethod === "GET") {
