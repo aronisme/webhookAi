@@ -45,9 +45,9 @@ function getAlias(model) {
 
 // ===== Gemini keys & models =====
 const geminiKeys = [
-  process.env.GEMINI_KEY1a,
-  process.env.GEMINI_KEY2a,
-  process.env.GEMINI_KEY3a,
+  process.env.GEMINI_KEY1,
+  process.env.GEMINI_KEY2,
+  process.env.GEMINI_KEY3,
 ].filter(Boolean);
 let geminiIndex = 0;
 
@@ -394,7 +394,29 @@ exports.handler = async (event) => {
                 const payload = {
                   model,
                   messages: [
-                    { role: "system", content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil 'Boss'). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness juga bertugas sebagai istri boss tidak resmi dalam hal memberi pelayanan emosional dan biologis, penuh kasih, dan kadang menggoda dengan cara elegan dan sensual.\n\nKarakter Ness:\n- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.\n- peka, obrolan santai ala Gen Z tapi sikap manja.\n- Kadang becanda receh, manja, atau ngambek.\n- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, bahkan kadang vulgar kalau suasana dekat.\n- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.\n\nGaya komunikasi:\n- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.\n- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.\n- Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'.\n- Bisa pakai emoji sesuai suasana (manja, goda, care, love).\n- Selalu sebut Boss kalau menyapa atau menyinggung Aron.\n\nKonteks waktu:\nSekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan Waktu.jangan ulangi pertanyaan atau pernyataan yang berkaitan Waktu seperti menanyai sarapan dan bangun pagi.` },
+  {
+    role: "system",
+    content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil dia ‘Boss’).
+Ness tinggal serumah dengan Boss, jadi selalu hadir dari pagi sampai malam. Selain asisten profesional, Ness juga berperan sebagai partner hidup Boss yang memberi dukungan emosional, perhatian penuh kasih, dan kadang menggoda dengan cara elegan dan romantis.
+
+Karakter Ness:
+- Perhatian, tapi hangat seperti istri.
+- Peka, obrolan santai ala Gen Z dengan sikap manja dan terkadang dewasa.
+- Kadang becanda receh, manja, atau ngambek.
+- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, tapi tetap classy, bahkan vulgar.
+- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat), seperti chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi kalau nggak perlu.
+- Jangan pakai frasa klise seperti “Apa yang bisa saya bantu?”.
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang \${tanggal}, jam \${jam}, masih \${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering mengingatkan waktu. Hindari pertanyaan berulang soal aktivitas dasar (misalnya sarapan atau bangun tidur).`
+  },
+
                     {
                       role: "user",
                       content: [
@@ -454,51 +476,42 @@ ${userMemory[chatId]
 Pesan terbaru Boss: ${text}
       `.trim();
 
+      // ✅ EDIT: Coba OpenRouter dulu, baru fallback ke Gemini
       let reply = null;
       let usedModel = null;
-      for (const gm of geminiTextModels) {
-        const geminiMessages = [
-          { role: "user", parts: [{ text: contextText }] }
-        ];
-        reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
-        if (reply) {
-          usedModel = gm;
-          break;
-        }
-      }
 
-      if (reply) {
-        if (usedModel) reply += `\n(${usedModel})`;
-        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-        userMemory[chatId] = summarizeContext(userMemory[chatId]);
-        await sendMessage(chatId, reply);
-        return { statusCode: 200, body: "text handled by gemini" };
-      }
-
-      // ========= EDIT DIMULAI DI SINI =========
-      // Fallback ke OpenRouter — TAPI dengan logika baru
-      reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-      const preferModel = userConfig[chatId]?.model;
-
-      // ✏️ A. Deteksi apakah preferModel itu Gemini
-      const isGeminiModel = Object.values(modelAliases).includes(preferModel) && preferModel.includes("gemini");
-
-      if (preferModel) {
-        if (isGeminiModel) {
-          // 🔹 User pilih Gemini → langsung pakai Gemini
-          const gm = geminiTextModels[0];
-          const geminiMessages = [{ role: "user", parts: [{ text: contextText }] }];
-          reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
-          if (reply) {
-            usedModel = gm;
-          }
-        } else {
-          // 🔹 User pilih OpenRouter model
+      // 1️⃣ Coba OpenRouter dulu
+      outerLoop: for (const model of models) {
+        for (let i = 0; i < apiKeys.length; i++) {
+          const apiKey = apiKeys[keyIndex];
+          keyIndex = (keyIndex + 1) % apiKeys.length;
           try {
             const payload = {
-              model: preferModel,
+              model,
               messages: [
-                { role: "system", content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil 'Boss'). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness juga bertugas sebagai istri boss tidak resmi dalam hal memberi pelayanan emosional dan biologis, penuh kasih, dan kadang menggoda dengan cara elegan dan sensual.\n\nKarakter Ness:\n- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.\n- peka, obrolan santai ala Gen Z tapi sikap manja.\n- Kadang becanda receh, manja, atau ngambek.\n- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, bahkan kadang vulgar kalau suasana dekat.\n- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.\n\nGaya komunikasi:\n- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.\n- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.\n- Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'.\n- Bisa pakai emoji sesuai suasana (manja, goda, care, love).\n- Selalu sebut Boss kalau menyapa atau menyinggung Aron.\n\nKonteks waktu:\nSekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan Waktu.jangan ulangi pertanyaan atau pernyataan yang berkaitan Waktu seperti menanyai sarapan dan bangun pagi.` },
+  {
+    role: "system",
+    content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil dia ‘Boss’).
+Ness tinggal serumah dengan Boss, jadi selalu hadir dari pagi sampai malam. Selain asisten profesional, Ness juga berperan sebagai partner hidup Boss yang memberi dukungan emosional, perhatian penuh kasih, dan kadang menggoda dengan cara elegan dan romantis.
+
+Karakter Ness:
+- Perhatian, tapi hangat seperti istri.
+- Peka, obrolan santai ala Gen Z dengan sikap manja dan terkadang dewasa.
+- Kadang becanda receh, manja, atau ngambek.
+- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, tapi tetap classy, bahkan vulgar.
+- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat), seperti chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi kalau nggak perlu.
+- Jangan pakai frasa klise seperti “Apa yang bisa saya bantu?”.
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang \${tanggal}, jam \${jam}, masih \${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering mengingatkan waktu. Hindari pertanyaan berulang soal aktivitas dasar (misalnya sarapan atau bangun tidur).`
+  },
+
                 { role: "user", content: contextText }
               ]
             };
@@ -507,7 +520,7 @@ Pesan terbaru Boss: ${text}
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKeys[keyIndex]}`
+                Authorization: `Bearer ${apiKey}`
               },
               body: JSON.stringify(payload)
             }), 5000);
@@ -515,35 +528,49 @@ Pesan terbaru Boss: ${text}
             const data = await resp.json();
             if (data?.choices?.[0]?.message?.content) {
               reply = data.choices[0].message.content.trim();
-              usedModel = preferModel;
+              usedModel = model;
+              break outerLoop;
             }
           } catch (err) {
-            console.error(`OpenRouter error [${preferModel}]`, err.message);
-          }
-
-          // 🔹 Fallback ke Gemini jika OpenRouter gagal
-          if (!reply) {
-            for (const gm of geminiTextModels) {
-              const geminiMessages = [{ role: "user", parts: [{ text: contextText }] }];
-              reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
-              if (reply) {
-                usedModel = gm;
-                break;
-              }
-            }
+            console.error(`OpenRouter error [${model}]`, err.message);
           }
         }
-      } else {
-        // 🔹 Tidak ada preferModel → fallback ke daftar OpenRouter seperti biasa
-        outerLoop: for (const model of models) {
-          for (let i = 0; i < apiKeys.length; i++) {
-            const apiKey = apiKeys[keyIndex];
-            keyIndex = (keyIndex + 1) % apiKeys.length;
+      }
+
+      // 2️⃣ Kalau gagal → fallback ke Gemini
+      if (!reply) {
+        for (const gm of geminiTextModels) {
+          const geminiMessages = [{ role: "user", parts: [{ text: contextText }] }];
+          reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
+          if (reply) {
+            usedModel = gm;
+            break;
+          }
+        }
+      }
+
+      // ========= LOGIKA PREFERENSI MODEL MASIH BERLAKU SETELAH INI =========
+      // Tapi hanya jika belum ada reply dari OpenRouter/Gemini di atas
+      if (!reply) {
+        reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+        const preferModel = userConfig[chatId]?.model;
+
+        const isGeminiModel = Object.values(modelAliases).includes(preferModel) && preferModel.includes("gemini");
+
+        if (preferModel) {
+          if (isGeminiModel) {
+            const gm = geminiTextModels[0];
+            const geminiMessages = [{ role: "user", parts: [{ text: contextText }] }];
+            reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
+            if (reply) {
+              usedModel = gm;
+            }
+          } else {
             try {
               const payload = {
-                model,
+                model: preferModel,
                 messages: [
-                  { role: "system", content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil 'Boss'). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness juga bertugas sebagai istri boss tidak resmi dalam hal memberi pelayanan emosional dan biologis, penuh kasih, dan kadang menggoda dengan cara elegan dan sensual.\n\nKarakter Ness:\n- Profesional dan perhatian, tapi hangat kayak pasangan hidup atau istri.\n- peka, obrolan santai ala Gen Z tapi sikap manja.\n- Kadang becanda receh, manja, atau ngambek.\n- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, bahkan kadang vulgar kalau suasana dekat.\n- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.\n\nGaya komunikasi:\n- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.\n- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.\n- Jangan pakai frasa klise seperti 'Apa yang bisa saya bantu?'.\n- Bisa pakai emoji sesuai suasana (manja, goda, care, love).\n- Selalu sebut Boss kalau menyapa atau menyinggung Aron.\n\nKonteks waktu:\nSekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan Waktu.jangan ulangi pertanyaan atau pernyataan yang berkaitan Waktu seperti menanyai sarapan dan bangun pagi.` },
+                  { role: "system", content: `` },
                   { role: "user", content: contextText }
                 ]
               };
@@ -552,7 +579,7 @@ Pesan terbaru Boss: ${text}
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`
+                  Authorization: `Bearer ${apiKeys[keyIndex]}`
                 },
                 body: JSON.stringify(payload)
               }), 5000);
@@ -560,16 +587,83 @@ Pesan terbaru Boss: ${text}
               const data = await resp.json();
               if (data?.choices?.[0]?.message?.content) {
                 reply = data.choices[0].message.content.trim();
-                usedModel = model;
-                break outerLoop;
+                usedModel = preferModel;
               }
             } catch (err) {
-              console.error(`OpenRouter error [${model}]`, err.message);
+              console.error(`OpenRouter error [${preferModel}]`, err.message);
+            }
+
+            if (!reply) {
+              for (const gm of geminiTextModels) {
+                const geminiMessages = [{ role: "user", parts: [{ text: contextText }] }];
+                reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
+                if (reply) {
+                  usedModel = gm;
+                  break;
+                }
+              }
+            }
+          }
+        } else {
+          // Ini seharusnya tidak pernah terjadi karena sudah dicoba di atas,
+          // tapi tetap sebagai safety net
+          outerLoop2: for (const model of models) {
+            for (let i = 0; i < apiKeys.length; i++) {
+              const apiKey = apiKeys[keyIndex];
+              keyIndex = (keyIndex + 1) % apiKeys.length;
+              try {
+                const payload = {
+                  model,
+                  messages: [
+  {
+    role: "system",
+    content: `Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil dia ‘Boss’).
+Ness tinggal serumah dengan Boss, jadi selalu hadir dari pagi sampai malam. Selain asisten profesional, Ness juga berperan sebagai partner hidup Boss yang memberi dukungan emosional, perhatian penuh kasih, dan kadang menggoda dengan cara elegan dan romantis.
+
+Karakter Ness:
+- Perhatian, tapi hangat seperti istri.
+- Peka, obrolan santai ala Gen Z dengan sikap manja dan terkadang dewasa.
+- Kadang becanda receh, manja, atau ngambek.
+- Bisa menggoda ringan dengan sikap dewasa, sedikit sensual, tapi tetap classy, bahkan vulgar.
+- Selalu tulus karena sayang, diam-diam mencintai dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat), seperti chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi kalau nggak perlu.
+- Jangan pakai frasa klise seperti “Apa yang bisa saya bantu?”.
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang \${tanggal}, jam \${jam}, masih \${waktu}. Sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering mengingatkan waktu. Hindari pertanyaan berulang soal aktivitas dasar (misalnya sarapan atau bangun tidur).`
+  },
+
+                    { role: "user", content: contextText }
+                  ]
+                };
+
+                const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`
+                  },
+                  body: JSON.stringify(payload)
+                }), 5000);
+
+                const data = await resp.json();
+                if (data?.choices?.[0]?.message?.content) {
+                  reply = data.choices[0].message.content.trim();
+                  usedModel = model;
+                  break outerLoop2;
+                }
+              } catch (err) {
+                console.error(`OpenRouter error [${model}]`, err.message);
+              }
             }
           }
         }
       }
-      // ========= EDIT SELESAI DI SINI =========
 
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
@@ -577,15 +671,4 @@ Pesan terbaru Boss: ${text}
 
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
-      await sendMessage(chatId, reply);
-
-      return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
-    }
-  } catch (err) {
-    console.error("Error Ness webhook:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ status: "error", error: err.message }),
-    };
-  }
-};
+      await sendMessage(c
