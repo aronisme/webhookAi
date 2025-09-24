@@ -3,7 +3,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 // === Endpoint Note Proxy (Netlify Function) ===
-const NOTE_API = "https://your-site.netlify.app/.netlify/functions/note";
+const NOTE_API = "https://whimsical-haupia-4ec491.netlify.app/.netlify/functions/note";
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -94,6 +94,14 @@ async function toBase64(url) {
   return Buffer.from(buffer).toString("base64");
 }
 
+// ✅ 1. Tambah timeout helper
+async function withTimeout(promise, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms))
+  ]);
+}
+
 async function callGemini(model, messages) {
   for (let i = 0; i < geminiKeys.length; i++) {
     const apiKey = geminiKeys[geminiIndex];
@@ -120,30 +128,33 @@ async function callGemini(model, messages) {
   return null;
 }
 
-// ✅ Fungsi Baru: handleNoteCommand
+// ✅ 3. Fungsi handleNoteCommand diperbarui
 async function handleNoteCommand(chatId, text) {
   try {
+    const { tanggal, jam, waktu } = getWIBTimeInfo();
     const helperPrompt = `
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu} (WIB).
+
 Kamu adalah AI pembantu parsing perintah.
-- Tugasmu hanya keluarkan JSON valid sesuai perintah, tanpa tambahan teks, tanpa penjelasan.
+- Balas HANYA JSON valid tanpa tambahan teks.
 - Format:
   {"type":"note","content":"..."}
-  {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
-  {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"...","callback":"..."}
-- Jangan jawab dengan kalimat biasa.
+  {"type":"schedule","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
+  {"type":"event","datetime":"YYYY-MM-DDTHH:mm:ss","content":"..."}
 - Jika tidak cocok → balas hanya: PASS.
 
 Pesan: ${text}
-`;
+    `.trim();
 
-
-    const result = await callGemini("gemini-1.5-flash", [
+    const result = await withTimeout(callGemini("gemini-1.5-flash", [
       { role: "user", parts: [{ text: helperPrompt }] }
-    ]);
+    ]), 5000);
 
     if (!result || result.trim() === "PASS") {
       return false;
     }
+
+    console.log("Gemini raw result:", result);
 
     const body = JSON.parse(result);
 
@@ -152,6 +163,9 @@ Pesan: ${text}
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+
+    const respText = await response.text();
+    console.log("NOTE_API response:", response.status, respText);
 
     if (response.ok) {
       await sendMessage(chatId, "✅ Oke Boss, sudah aku catat/jadwalkan!");
@@ -191,8 +205,8 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-// ===== Memory crumbs =====
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 30;
+// ✅ 5. Batasi memory context
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 10; // default 10 pesan saja
 const userMemory = {};
 const userConfig = {};
 const fallbackReplies = [
@@ -203,19 +217,12 @@ const fallbackReplies = [
 ];
 
 function summarizeContext(history) {
-  if (history.length <= MEMORY_LIMIT / 2) return history;
-  const summary = history
-    .slice(0, MEMORY_LIMIT / 4)
-    .map((msg) => ({
-      text: msg.text.slice(0, 50) + "...",
-      timestamp: msg.timestamp,
-    }));
-  return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
+  if (history.length <= MEMORY_LIMIT) return history;
+  return history.slice(-MEMORY_LIMIT);
 }
 
 // ===== Main handler =====
 exports.handler = async (event) => {
-  // Hanya izinkan metode GET & POST
   if (!["GET", "POST"].includes(event.httpMethod)) {
     return {
       statusCode: 405,
@@ -225,7 +232,6 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      // Forward GET ke Telegram (misal: setWebhook)
       const url = TELEGRAM_API + "/getMe";
       const response = await fetch(url);
       const text = await response.text();
@@ -239,7 +245,6 @@ exports.handler = async (event) => {
 
       const chatId = message.chat.id;
       const text = (message.text || "").trim();
-      const lower = text.toLowerCase();
       const photos = message.photo || [];
       const hasPhoto = photos.length > 0;
 
@@ -250,13 +255,12 @@ exports.handler = async (event) => {
 
       await typing(chatId);
 
-      // === FILTER PERINTAH NOTE/JADWAL/EVENT ===
-      if (/\b(catat|note|jadwal|event|ingatkan|remind)\b/i.test(text)) {
+      // ✅ 2. Perketat regex perintah
+      if (/\b(catat|catatan|dicatat|note|notes|noted|tulis|simpan|jadwal|jadwalkan|dijadwalkan|schedule|scheduling|appointment?|rapat|meeting|event|acara|kegiatan|ulang\s*tahun|ultah|pesta|remind(er)?|ingatkan|pengingat|alarm)\b/i.test(text)) {
         const handled = await handleNoteCommand(chatId, text);
         if (handled) {
           return { statusCode: 200, body: "note handled" };
         }
-        // kalau tidak dikenali → biarkan lanjut ke AI utama
       }
 
       const { tanggal, jam, waktu } = getWIBTimeInfo();
@@ -292,7 +296,7 @@ exports.handler = async (event) => {
                 ]
               }
             ];
-            reply = await callGemini(gm, geminiMessages);
+            reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
             if (reply) {
               usedModel = gm;
               break;
@@ -349,14 +353,14 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
                   ]
                 };
 
-                const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${apiKey}`
                   },
                   body: JSON.stringify(payload)
-                });
+                }), 5000);
 
                 const data = await resp.json();
                 if (data?.choices?.[0]?.message?.content) {
@@ -404,7 +408,7 @@ Pesan terbaru Boss: ${text}
         const geminiMessages = [
           { role: "user", parts: [{ text: contextText }] }
         ];
-        reply = await callGemini(gm, geminiMessages);
+        reply = await withTimeout(callGemini(gm, geminiMessages), 5000);
         if (reply) {
           usedModel = gm;
           break;
@@ -457,14 +461,15 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
             ],
           };
 
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${apiKeys[keyIndex]}`,
             },
             body: JSON.stringify(payload),
-          });
+          }), 5000);
+
           const data = await resp.json();
           if (data?.choices?.[0]?.message?.content) {
             reply = data.choices[0].message.content.trim();
@@ -513,14 +518,15 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
                 ],
               };
 
-              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              const resp = await withTimeout(fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify(payload),
-              });
+              }), 5000);
+
               const data = await resp.json();
               if (data?.choices?.[0]?.message?.content) {
                 reply = data.choices[0].message.content.trim();
