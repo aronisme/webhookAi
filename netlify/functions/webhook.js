@@ -5,6 +5,7 @@ const GAS_URL = process.env.GAS_URL;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
+  process.env.OPENROUTER_KEY8,
   process.env.OPENROUTER_KEY7,
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
