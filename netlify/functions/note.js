@@ -1,8 +1,10 @@
-const gasUrl = "https://script.google.com/macros/s/AKfycby6RDmsMaNlz1RYGi0MMRtIAJYc4pUw6rGtqJIhz8yxpslHwAl2ZmdiIKgL2EMiX-9c/exec?auth=MYSECRET123";
+const GAS_URL = "https://script.google.com/macros/s/AKfycby6RDmsMaNlz1RYGi0MMRtIAJYc4pUw6rGtqJIhz8yxpslHwAl2ZmdiIKgL2EMiX-9c/exec?auth=MYSECRET123";
 
 exports.handler = async (event) => {
-  // Hanya izinkan metode GET & POST
-  if (!["GET", "POST"].includes(event.httpMethod)) {
+  const { httpMethod, rawQuery, body } = event;
+
+  // ✅ Hanya izinkan metode GET dan POST
+  if (!["GET", "POST"].includes(httpMethod)) {
     return {
       statusCode: 405,
       body: JSON.stringify({ status: "error", error: "Method Not Allowed" }),
@@ -10,40 +12,48 @@ exports.handler = async (event) => {
   }
 
   try {
-    if (event.httpMethod === "GET") {
-      // forward query string ke GAS
-      const url = gasUrl + (event.rawQuery ? "&" + event.rawQuery : "");
+    if (httpMethod === "GET") {
+      // 🔁 Teruskan query string ke Google Apps Script (GAS)
+      const url = GAS_URL + (rawQuery ? `&${rawQuery}` : "");
       const response = await fetch(url);
       const text = await response.text();
-      return { statusCode: response.ok ? 200 : 500, body: text };
+
+      return {
+        statusCode: response.ok ? 200 : 500,
+        body: text,
+      };
     }
 
-    if (event.httpMethod === "POST") {
-      // Validasi tipe data (opsional)
-      try {
-        const body = JSON.parse(event.body);
-        if (
-          body.type &&
-          !["note", "schedule", "event"].includes(body.type)
-        ) {
-          return {
-            statusCode: 400,
-            body: JSON.stringify({ status: "error", error: "Invalid type" }),
-          };
+    if (httpMethod === "POST") {
+      // 🔍 Validasi payload (opsional, hanya jika berupa JSON valid)
+      if (body) {
+        try {
+          const jsonBody = JSON.parse(body);
+          const validTypes = ["note", "schedule", "event"];
+          if (jsonBody.type && !validTypes.includes(jsonBody.type)) {
+            return {
+              statusCode: 400,
+              body: JSON.stringify({ status: "error", error: "Invalid type" }),
+            };
+          }
+        } catch {
+          // Jika bukan JSON valid, tetap lanjutkan — biarkan GAS menangani
         }
-      } catch {
-        // kalau bukan JSON, biarin diterusin apa adanya
       }
 
-      // forward ke GAS
-      const response = await fetch(gasUrl, {
+      // 🔁 Teruskan body asli ke GAS
+      const response = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: event.body,
+        body: body || "",
       });
 
       const text = await response.text();
-      return { statusCode: response.ok ? 200 : 500, body: text };
+
+      return {
+        statusCode: response.ok ? 200 : 500,
+        body: text,
+      };
     }
   } catch (err) {
     return {

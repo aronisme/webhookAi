@@ -223,6 +223,22 @@ function summarizeContext(history) {
   return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
 }
 
+// 🔹 🔹 🔹 HELPER BARU: forwardToNote
+async function forwardToNote(type, content) {
+  try {
+    const res = await fetch(`${process.env.BASE_URL}/.netlify/functions/note`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, content }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return data;
+  } catch (err) {
+    return { status: "error", error: err.message };
+  }
+}
+
 // ===== Main handler =====
 export async function handler(event) {
   try {
@@ -289,7 +305,6 @@ Pesan terbaru Boss: ${text}
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
       } else if (!reply || fallbackReplies.includes(reply)) {
-        // 🔹 3. INDIKATOR FALLBACK
         reply = `${reply} (AI error, pakai fallback)`;
       }
 
@@ -325,8 +340,60 @@ Pesan terbaru Boss: ${text}
 
     await typing(chatId);
 
-    // ==== SLASH COMMANDS ====
+    // ==== SLASH COMMANDS ==== (DIPERBARUI)
     if (text.startsWith("/")) {
+      // === /catat ===
+      if (lower.startsWith("/catat")) {
+        const content = text.split(" ").slice(1).join(" ").trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: /catat beli kopi ☕");
+          return { statusCode: 200, body: "empty note" };
+        }
+
+        const data = await forwardToNote("note", content);
+        if (data?.status === "success") {
+          await sendMessage(chatId, `Boss ✨ catatan tersimpan: ${content}`);
+        } else {
+          await sendMessage(chatId, `Boss ❌ gagal catat: ${data?.error || "unknown error"}`);
+        }
+        return { statusCode: 200, body: "note saved" };
+      }
+
+      // === /jadwal ===
+      if (lower.startsWith("/jadwal")) {
+        const content = text.split(" ").slice(1).join(" ").trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi jadwalnya mana? contoh: /jadwal meeting jam 10 🕙");
+          return { statusCode: 200, body: "empty schedule" };
+        }
+
+        const data = await forwardToNote("schedule", content);
+        if (data?.status === "success") {
+          await sendMessage(chatId, `Boss ✨ jadwal tersimpan: ${content}`);
+        } else {
+          await sendMessage(chatId, `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
+        }
+        return { statusCode: 200, body: "schedule saved" };
+      }
+
+      // === /event ===
+      if (lower.startsWith("/event")) {
+        const content = text.split(" ").slice(1).join(" ").trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi eventnya mana? contoh: /event seminar online 📅");
+          return { statusCode: 200, body: "empty event" };
+        }
+
+        const data = await forwardToNote("event", content);
+        if (data?.status === "success") {
+          await sendMessage(chatId, `Boss ✨ event tersimpan: ${content}`);
+        } else {
+          await sendMessage(chatId, `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
+        }
+        return { statusCode: 200, body: "event saved" };
+      }
+
+      // === Pemilihan model (fallback) ===
       const cmd = lower.slice(1).split(" ")[0];
       const chosen = modelAliases[cmd];
 
@@ -342,12 +409,12 @@ Pesan terbaru Boss: ${text}
         }
         await sendMessage(chatId, list);
       } else {
-        await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
+        await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, atau /model.`);
       }
-      return { statusCode: 200, body: "choose model" };
+      return { statusCode: 200, body: "slash command handled" };
     }
 
-    // ==== COMMANDS ====
+    // ==== COMMANDS (non-slash) ====
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
