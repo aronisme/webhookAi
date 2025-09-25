@@ -93,7 +93,7 @@ Karakter Ness:
 - Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
 
 Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Balasan natural, pendek (2–5 kalimat) kayak chat WhatsApp.
 - Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
@@ -655,11 +655,15 @@ Pesan terbaru Boss: ${text}
     }
 
     // === FILTER DENGAN AI PEMBANTU ===
-    const helperReply = await callHelperAI(text);
-    if (helperReply && helperReply !== "NO") {
-      await sendMessage(chatId, helperReply);
-      return { statusCode: 200, body: "filtered by helper" };
-    }
+const helperReply = await callHelperAI(text);
+if (helperReply && helperReply !== "NO") {
+  // Simulasikan input baru hasil parse helper
+  update.message.text = helperReply;
+
+  // jalankan lagi blok "slash commands" di atas
+  const fakeEvent = { ...event, body: JSON.stringify(update) };
+  return await handler(fakeEvent);
+}
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
