@@ -130,6 +130,49 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
+// 🔹 AI Pembantu: deteksi & ekstrak catatan/jadwal/event
+async function callHelperAI(text) {
+  const { tanggal, jam, waktu } = getWIBTimeInfo();
+
+  const helperPayload = {
+    model: "mistralai/mistral-7b-instruct:free", // model ringan, bisa diganti
+    messages: [
+      {
+        role: "system",
+        content: `
+Kamu adalah AI ekstraktor khusus. Tugasmu:
+- Deteksi apakah input adalah CATATAN, JADWAL, atau EVENT.
+- Jika YA, ubah ke format standar:
+  /catat isi
+  /jadwal YYYY-MM-DD HH:MM isi
+  /event YYYY-MM-DD HH:MM isi
+- Gunakan waktu realtime: sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
+  Jika user bilang "besok", "lusa", "hari ini", konversikan ke tanggal absolut (format YYYY-MM-DD).
+- Jika input bukan catatan/jadwal/event, balas hanya dengan "NO".
+        `.trim()
+      },
+      { role: "user", content: text }
+    ]
+  };
+
+  try {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKeys[0]}`, // pakai key pertama
+      },
+      body: JSON.stringify(helperPayload),
+    });
+
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content?.trim() || "NO";
+  } catch (err) {
+    console.error("Helper AI error:", err.message);
+    return "NO";
+  }
+}
+
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
 const userMemory = {};
 const userConfig = {};
@@ -343,7 +386,7 @@ Pesan terbaru Boss: ${text}
 
     await typing(chatId);
 
-    // ==== SLASH COMMANDS ==== (DIPERBARUI SESUAI PERMINTAAN)
+    // ==== SLASH COMMANDS ====
     if (text.startsWith("/")) {
       // === /catat ===
       if (lower.startsWith("/catat")) {
@@ -362,7 +405,7 @@ Pesan terbaru Boss: ${text}
         return { statusCode: 200, body: "note saved" };
       }
 
-      // === /jadwal === (DIPERBAIKI)
+      // === /jadwal ===
       if (lower.startsWith("/jadwal")) {
         const parts = text.split(" ").slice(1);
         if (parts.length < 3) {
@@ -381,7 +424,7 @@ Pesan terbaru Boss: ${text}
         return { statusCode: 200, body: "schedule saved" };
       }
 
-      // === /event === (DIPERBAIKI)
+      // === /event ===
       if (lower.startsWith("/event")) {
         const parts = text.split(" ").slice(1);
         if (parts.length < 3) {
@@ -609,6 +652,13 @@ Pesan terbaru Boss: ${text}
         await sendMessage(chatId, "Boss ❌ gagal proses gambar");
         return { statusCode: 200, body: "image error" };
       }
+    }
+
+    // === FILTER DENGAN AI PEMBANTU ===
+    const helperReply = await callHelperAI(text);
+    if (helperReply && helperReply !== "NO") {
+      await sendMessage(chatId, helperReply);
+      return { statusCode: 200, body: "filtered by helper" };
     }
 
     // ==== ELSE → AI ====
