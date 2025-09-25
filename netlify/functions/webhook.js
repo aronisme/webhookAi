@@ -9,6 +9,9 @@ const apiKeys = [
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
   process.env.OPENROUTER_KEY4,
+  process.env.OPENROUTER_KEY5,
+  process.env.OPENROUTER_KEY6,
+  process.env.OPENROUTER_KEY7,
 ].filter(Boolean);
 let keyIndex = 0;
 
@@ -95,7 +98,7 @@ Gaya komunikasi:
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
 - Tidak banyak tanya, tapi lakukan apa yang harus dilakukan.
-- Jangan alihkan topik pembahsan.
+- Jangan alihkan topik pembicaraan.
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
