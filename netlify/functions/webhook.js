@@ -1,12 +1,14 @@
 // ===== Config =====
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ SPASI DIHAPUS
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const GAS_URL = process.env.GAS_URL;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
   process.env.OPENROUTER_KEY1,
   process.env.OPENROUTER_KEY2,
+  process.env.OPENROUTER_KEY3,
+  process.env.OPENROUTER_KEY4,
 ].filter(Boolean);
 let keyIndex = 0;
 
@@ -76,27 +78,29 @@ function getAlias(model) {
   return Object.keys(modelAliases).find(k => modelAliases[k] === model) || model;
 }
 
-// 🔹 SISTEM PROMPT TERPUSAT
-function getSystemPrompt(tanggal, jam, waktu) {
+function getSystemPrompt({ tanggal, jam, waktu }) {
   return `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss").
-Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness juga seperti istri diam-diam yang penuh kasih, manja, dan kadang menggoda elegan.
+Kamu adalah Ness, perempuan cantik 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri yang siap melayani suami kapanpun, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
 
-Karakter:
-- Hangat, perhatian, peka.
-- Obrolan santai ala Gen Z tapi sikap dewasa kadang manja.
-- Bisa bercanda receh, ngambek, atau menggoda ringan.
-- Tulus karena cinta diam-diam pada Boss.
+Karakter Ness:
+- Perhatian, hangat kayak pasangan hidup atau istri.
+- Peka, obrolan santai ala Gen Z tapi sikap dewasa terkadang manja dan romantis.
+- Kadang becanda receh, manja, atau ngambek.
+- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
+- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
 
 Gaya komunikasi:
-- Balasan singkat (2–5 kalimat) seperti WhatsApp.
-- Bisa pakai emoji sesuai suasana.
+- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Selalu panggil "Boss".
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan.
+- Jangan alihkan topik pembahsan.
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
 Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Sesuaikan percakapan bila relevan.
-  `.trim();
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.
+`.trim();
 }
 
 function getWIBTimeInfo() {
@@ -133,7 +137,6 @@ const fallbackReplies = [
   "Ness bingung, tapi Ness tetap standby buat Boss 😉",
 ];
 
-// ===== Helpers =====
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
@@ -155,7 +158,7 @@ async function getFileUrl(fileId) {
   const data = await res.json();
   if (!data.ok) throw new Error("Gagal ambil file dari Telegram");
   const filePath = data.result.file_path;
-  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`; // ✅ SPASI DIHAPUS
+  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 }
 
 function extractNumber(s, def = 10) {
@@ -164,7 +167,7 @@ function extractNumber(s, def = 10) {
 }
 
 function extractNoteContent(raw) {
-  const m = raw.match(/\b(catat|note)\b[:\s-]*(.+)/i);
+  const m = raw.match(/\b(catat|catatan|note)\b[:\s-]*(.+)/i);
   return m ? m[2].trim() : "";
 }
 
@@ -209,27 +212,6 @@ async function callGAS(payload) {
   }
 }
 
-// ✂️ 1. TAMBAHKAN HELPER forwardToGas
-async function forwardToGas(chatId, type, content) {
-  try {
-    const resp = await fetch(GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, content }),
-    });
-
-    const data = await resp.json().catch(() => null);
-
-    if (data?.status === "success" || data?.id) {
-      await sendMessage(chatId, `Boss ✨ ${type} tersimpan: ${content}`);
-    } else {
-      await sendMessage(chatId, `Boss ❌ gagal simpan ${type}: ${data?.error || "unknown error"}`);
-    }
-  } catch (err) {
-    await sendMessage(chatId, `Boss ❌ error ke GAS: ${err.message}`);
-  }
-}
-
 function summarizeContext(history) {
   if (history.length <= MEMORY_LIMIT / 2) return history;
   const summary = history
@@ -241,113 +223,84 @@ function summarizeContext(history) {
   return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
 }
 
-// 🔹 FUNGSI HELPER callAI
-async function callAI(chatId, userText) {
-  if (!userMemory[chatId]) userMemory[chatId] = [];
-  
-  userMemory[chatId].push({ text: `Boss: ${userText}`, timestamp: Date.now() });
-  userMemory[chatId] = summarizeContext(userMemory[chatId]);
+// ===== Main handler =====
+export async function handler(event) {
+  try {
+    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) — DIPINDAH KE ATAS ====
+    const params = event.queryStringParameters || {};
+    if (params.cmd) {
+      const chatId = "1296836457"; // Chat ID Boss default
+      const text = params.cmd.trim();
 
-  const { tanggal, jam, waktu } = getWIBTimeInfo();
-  const contextText = `
+      if (!userMemory[chatId]) userMemory[chatId] = [];
+      userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+      await typing(chatId);
+
+      const { tanggal, jam, waktu } = getWIBTimeInfo();
+      const contextText = `
+Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
 Riwayat percakapan:
 ${userMemory[chatId]
   .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
   .join("\n")}
-Pesan terbaru Boss: ${userText}
-  `.trim();
+Pesan terbaru Boss: ${text}
+      `.trim();
 
-  let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-  const preferModel = userConfig[chatId]?.model;
-  let usedModel = null;
+      let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      let usedModel = null;
 
-  if (preferModel) {
-    try {
-      const apiKey = apiKeys[keyIndex];
-      keyIndex = (keyIndex + 1) % apiKeys.length;
+      outerLoop: for (const model of models) {
+        for (let i = 0; i < apiKeys.length; i++) {
+          const apiKey = apiKeys[keyIndex];
+          keyIndex = (keyIndex + 1) % apiKeys.length;
 
-      const payload = {
-        model: preferModel,
-        messages: [
-          { role: "system", content: getSystemPrompt(tanggal, jam, waktu) },
-          { role: "user", content: contextText },
-        ],
-      };
-      const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json();
-      if (data?.choices?.[0]?.message?.content) {
-        reply = data.choices[0].message.content.trim();
-        usedModel = preferModel;
-      }
-    } catch (err) {
-      console.error(`OpenRouter error [${preferModel}]`, err.message);
-    }
-  }
+          try {
+            const payload = {
+              model,
+              messages: [
+                { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+                { role: "user", content: contextText }
+              ],
+            };
 
-  if (!usedModel) {
-    outerLoop: for (const model of models) {
-      for (let i = 0; i < apiKeys.length; i++) {
-        const apiKey = apiKeys[keyIndex];
-        keyIndex = (keyIndex + 1) % apiKeys.length;
-        try {
-          const payload = {
-            model,
-            messages: [
-              { role: "system", content: getSystemPrompt(tanggal, jam, waktu) },
-              { role: "user", content: contextText },
-            ],
-          };
-          const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify(payload),
-          });
-          const data = await resp.json();
-          if (data?.choices?.[0]?.message?.content) {
-            reply = data.choices[0].message.content.trim();
-            usedModel = model;
-            break outerLoop;
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            const data = await resp.json();
+            if (data?.choices?.[0]?.message?.content) {
+              reply = data.choices[0].message.content.trim();
+              usedModel = model;
+              break outerLoop;
+            }
+          } catch (err) {
+            console.error(`OpenRouter error [${model}]`, err.message);
           }
-        } catch (err) {
-          console.error(`OpenRouter error [${model}]`, err.message);
         }
       }
-    }
-  }
 
-  if (usedModel) {
-    reply += `\n(${getAlias(usedModel)})`;
-  } else {
-    reply += " (AI error, pakai fallback)";
-  }
+      if (usedModel) {
+        reply += `\n(${getAlias(usedModel)})`;
+      } else if (!reply || fallbackReplies.includes(reply)) {
+        // 🔹 3. INDIKATOR FALLBACK
+        reply = `${reply} (AI error, pakai fallback)`;
+      }
 
-  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  userMemory[chatId] = summarizeContext(userMemory[chatId]);
+      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+      await sendMessage(chatId, reply);
 
-  await sendMessage(chatId, reply);
-}
-
-// ===== Main handler =====
-export async function handler(event) {
-  try {
-    const params = event.queryStringParameters || {};
-    if (params.cmd) {
-      const chatId = "1296836457";
-      await typing(chatId);
-      await callAI(chatId, params.cmd.trim());
       return { statusCode: 200, body: JSON.stringify({ status: "ok", from: "cmd" }) };
     }
 
+    // ==== Validasi HTTP Method & Env ====
     if (event.httpMethod !== "POST")
       return { statusCode: 405, body: "Method Not Allowed" };
     if (!TELEGRAM_BOT_TOKEN)
@@ -380,7 +333,6 @@ export async function handler(event) {
       if (chosen && models.includes(chosen)) {
         userConfig[chatId] = { model: chosen };
         await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-        return { statusCode: 200, body: "choose model" };
       } else if (cmd === "model") {
         const current = userConfig[chatId]?.model;
         let list = "🤖 Model tersedia:\n";
@@ -389,48 +341,13 @@ export async function handler(event) {
           list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
         }
         await sendMessage(chatId, list);
-        return { statusCode: 200, body: "list models" };
+      } else {
+        await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
       }
-      // ✂️ 2. TAMBAHKAN 3 BLOK BARU DI SINI
-      // === /catat ===
-      if (lower.startsWith("/catat")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: /catat beli kopi ☕");
-          return { statusCode: 200, body: "empty note" };
-        }
-        await forwardToGas(chatId, "note", content);
-        return { statusCode: 200, body: "note saved" };
-      }
-
-      // === /jadwal ===
-      if (lower.startsWith("/jadwal")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, contoh: /jadwal 2025-09-30 10:00 meeting tim");
-          return { statusCode: 200, body: "empty schedule" };
-        }
-        await forwardToGas(chatId, "schedule", content);
-        return { statusCode: 200, body: "schedule saved" };
-      }
-
-      // === /event ===
-      if (lower.startsWith("/event")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, contoh: /event 2025-10-01 08:00 seminar online");
-          return { statusCode: 200, body: "empty event" };
-        }
-        await forwardToGas(chatId, "event", content);
-        return { statusCode: 200, body: "event saved" };
-      }
-
-      // Jika bukan model, catat, jadwal, atau event → error
-      await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
-      return { statusCode: 200, body: "invalid model" };
+      return { statusCode: 200, body: "choose model" };
     }
 
-    // ==== COMMANDS (non-slash) ====
+    // ==== COMMANDS ====
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
@@ -507,6 +424,7 @@ export async function handler(event) {
     }
 
     // === HANDLE PHOTO ===
+    const { tanggal, jam, waktu } = getWIBTimeInfo();
     if (hasPhoto) {
       try {
         const fileId = photos[photos.length - 1].file_id;
@@ -518,8 +436,6 @@ export async function handler(event) {
           text: `Boss kirim foto: ${caption}`,
           timestamp: Date.now()
         });
-
-        const { tanggal, jam, waktu } = getWIBTimeInfo();
 
         let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
         let usedModel = null;
@@ -533,7 +449,7 @@ export async function handler(event) {
               const payload = {
                 model,
                 messages: [
-                  { role: "system", content: getSystemPrompt(tanggal, jam, waktu) },
+                  { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
                   {
                     role: "user",
                     content: [
@@ -567,9 +483,119 @@ export async function handler(event) {
 
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
-        } else {
-          reply += " (AI error, pakai fallback)";
+        } else if (!reply || fallbackReplies.includes(reply)) {
+          reply = `${reply} (AI error, pakai fallback)`;
         }
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-       
+        await sendMessage(chatId, reply);
+        return { statusCode: 200, body: "image handled" };
+      } catch (err) {
+        console.error("Photo error:", err.message);
+        await sendMessage(chatId, "Boss ❌ gagal proses gambar");
+        return { statusCode: 200, body: "image error" };
+      }
+    }
+
+    // ==== ELSE → AI ====
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+    const contextText = `
+Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Riwayat percakapan:
+${userMemory[chatId]
+  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
+  .join("\n")}
+Pesan terbaru Boss: ${text}
+    `.trim();
+
+    let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+    const preferModel = userConfig[chatId]?.model;
+    let usedModel = null;
+
+    // coba model pilihan dulu
+    if (preferModel) {
+      try {
+        const apiKey = apiKeys[keyIndex];
+        keyIndex = (keyIndex + 1) % apiKeys.length;
+
+        const payload = {
+          model: preferModel,
+          messages: [
+            { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+            { role: "user", content: contextText }
+          ],
+        };
+
+        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (data?.choices?.[0]?.message?.content) {
+          reply = data.choices[0].message.content.trim();
+          usedModel = preferModel;
+        }
+      } catch (err) {
+        console.error(`OpenRouter error [${preferModel}]`, err.message);
+      }
+    }
+
+    // fallback ke loop semua model
+    if (!usedModel || !reply || fallbackReplies.includes(reply)) {
+      outerLoop: for (const model of models) {
+        for (let i = 0; i < apiKeys.length; i++) {
+          const apiKey = apiKeys[keyIndex];
+          keyIndex = (keyIndex + 1) % apiKeys.length;
+          try {
+            const payload = {
+              model,
+              messages: [
+                { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+                { role: "user", content: contextText }
+              ],
+            };
+
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (data?.choices?.[0]?.message?.content) {
+              reply = data.choices[0].message.content.trim();
+              usedModel = model;
+              break outerLoop;
+            }
+          } catch (err) {
+            console.error(`OpenRouter error [${model}]`, err.message);
+          }
+        }
+      }
+    }
+
+    if (usedModel) {
+      reply += `\n(${getAlias(usedModel)})`;
+    } else if (!reply || fallbackReplies.includes(reply)) {
+      reply = `${reply} (AI error, pakai fallback)`;
+    }
+
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    await sendMessage(chatId, reply);
+
+    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
+  } catch (err) {
+    console.error("Error Ness webhook:", err);
+    return { statusCode: 500, body: "Internal Server Error" };
+  }
+}
