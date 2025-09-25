@@ -5,22 +5,22 @@ const GAS_URL = process.env.GAS_URL;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
-  process.env.OPENROUTER_KEY1,
+  process.env.OPENROUTER_KEY7,
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
-  process.env.OPENROUTER_KEY4,
-  process.env.OPENROUTER_KEY5,
   process.env.OPENROUTER_KEY6,
-  process.env.OPENROUTER_KEY7,
+  process.env.OPENROUTER_KEY5,
+  process.env.OPENROUTER_KEY4,
+  process.env.OPENROUTER_KEY1,
 ].filter(Boolean);
 let keyIndex = 0;
 
 const models = [
   "google/gemini-2.0-flash-exp:free",
   "x-ai/grok-4-fast:free",
+   "meta-llama/llama-4-maverick:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-  "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
   "moonshotai/kimi-vl-a3b-thinking:free",
   "mistralai/mistral-small-3.2-24b-instruct:free",
@@ -42,11 +42,6 @@ const modelAliases = {
   qwen480: "qwen/qwen3-coder:free",
   qwen235: "qwen/qwen3-235b-a22b:free",
   llama70: "meta-llama/llama-3.3-70b-instruct:free",
-  gemma27: "google/gemma-3-27b-it:free",
-  gemma12: "google/gemma-3-12b-it:free",
-  gemma4: "google/gemma-3-4b-it:free",
-  gemma9: "google/gemma-2-9b-it:free",
-  nemotron: "nvidia/nemotron-nano-9b-v2:free",
 };
 
 function getAlias(model) {
