@@ -226,13 +226,13 @@ function summarizeContext(history) {
   return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
 }
 
-// 🔹 🔹 🔹 HELPER BARU: forwardToNote
-async function forwardToNote(type, content) {
+// 🔹 🔹 🔹 HELPER BARU: forwardToNote — DIPERBAIKI SESUAI PERMINTAAN
+async function forwardToNote(type, payload) {
   try {
     const res = await fetch(`${process.env.BASE_URL}/.netlify/functions/note`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, content }),
+      body: JSON.stringify({ type, ...payload }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -343,7 +343,7 @@ Pesan terbaru Boss: ${text}
 
     await typing(chatId);
 
-    // ==== SLASH COMMANDS ==== (DIPERBARUI)
+    // ==== SLASH COMMANDS ==== (DIPERBARUI SESUAI PERMINTAAN)
     if (text.startsWith("/")) {
       // === /catat ===
       if (lower.startsWith("/catat")) {
@@ -353,7 +353,7 @@ Pesan terbaru Boss: ${text}
           return { statusCode: 200, body: "empty note" };
         }
 
-        const data = await forwardToNote("note", content);
+        const data = await forwardToNote("note", { content });
         if (data?.status === "success") {
           await sendMessage(chatId, `Boss ✨ catatan tersimpan: ${content}`);
         } else {
@@ -362,38 +362,82 @@ Pesan terbaru Boss: ${text}
         return { statusCode: 200, body: "note saved" };
       }
 
-      // === /jadwal ===
+      // === /jadwal === (DIPERBAIKI)
       if (lower.startsWith("/jadwal")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi jadwalnya mana? contoh: /jadwal meeting jam 10 🕙");
-          return { statusCode: 200, body: "empty schedule" };
+        const parts = text.split(" ").slice(1);
+        if (parts.length < 3) {
+          await sendMessage(chatId, "Boss, format: /jadwal YYYY-MM-DD HH:MM isi acara");
+          return { statusCode: 200, body: "bad schedule format" };
         }
+        const datetime = parts[0] + " " + parts[1];
+        const content = parts.slice(2).join(" ");
+        const data = await forwardToNote("schedule", { datetime, content });
 
-        const data = await forwardToNote("schedule", content);
         if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ jadwal tersimpan: ${content}`);
+          await sendMessage(chatId, `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`);
         } else {
           await sendMessage(chatId, `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
         }
         return { statusCode: 200, body: "schedule saved" };
       }
 
-      // === /event ===
+      // === /event === (DIPERBAIKI)
       if (lower.startsWith("/event")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi eventnya mana? contoh: /event seminar online 📅");
-          return { statusCode: 200, body: "empty event" };
+        const parts = text.split(" ").slice(1);
+        if (parts.length < 3) {
+          await sendMessage(chatId, "Boss, format: /event YYYY-MM-DD HH:MM nama event");
+          return { statusCode: 200, body: "bad event format" };
         }
+        const datetime = parts[0] + " " + parts[1];
+        const content = parts.slice(2).join(" ");
+        const data = await forwardToNote("event", { datetime, content });
 
-        const data = await forwardToNote("event", content);
         if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ event tersimpan: ${content}`);
+          await sendMessage(chatId, `Boss ✨ event tersimpan: ${datetime} • ${content}`);
         } else {
           await sendMessage(chatId, `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
         }
         return { statusCode: 200, body: "event saved" };
+      }
+
+      // === Command Lihat Baru ===
+      if (lower.startsWith("/lihatcatat")) {
+        const q = text.split(" ").slice(1).join(" ");
+        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const notes = data?.data || [];
+        const lines = notes.length
+          ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
+          : "(kosong)";
+        await sendMessage(chatId, `Boss ✨ Catatan:\n${lines}`);
+        return { statusCode: 200, body: "lihat catat" };
+      }
+
+      if (lower.startsWith("/lihatjadwal")) {
+        const q = text.split(" ").slice(1).join(" ");
+        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const items = data?.data || [];
+        const lines = items.length
+          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
+          : "(kosong)";
+        await sendMessage(chatId, `Boss ✨ Jadwal:\n${lines}`);
+        return { statusCode: 200, body: "lihat jadwal" };
+      }
+
+      if (lower.startsWith("/lihatevent")) {
+        const q = text.split(" ").slice(1).join(" ");
+        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const items = data?.data || [];
+        const lines = items.length
+          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
+          : "(kosong)";
+        await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
+        return { statusCode: 200, body: "lihat event" };
       }
 
       // === Pemilihan model (fallback) ===
@@ -412,7 +456,7 @@ Pesan terbaru Boss: ${text}
         }
         await sendMessage(chatId, list);
       } else {
-        await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, atau /model.`);
+        await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, /lihatcatat, /lihatjadwal, /lihatevent, atau /model.`);
       }
       return { statusCode: 200, body: "slash command handled" };
     }
