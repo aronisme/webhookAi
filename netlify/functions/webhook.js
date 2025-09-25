@@ -515,20 +515,6 @@ Pesan terbaru Boss: ${text}
       return { statusCode: 200, body: "debug gas" };
     }
 
-    if (/\b(catat|note)\b/i.test(lower)) {
-      const content = extractNoteContent(text);
-      if (!content) {
-        await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: catat beli kopi ☕");
-        return { statusCode: 200, body: "empty note" };
-      }
-      try {
-        const data = await callGAS({ command: "addNote", text: content });
-        await sendMessage(chatId, `Boss ✨ ${data.message || "Catatan tersimpan."}`);
-      } catch (e) {
-        await sendMessage(chatId, `Boss ❌ gagal catat: ${e.message}`);
-      }
-      return { statusCode: 200, body: "note route" };
-    }
 
     if (lower.includes("lihat catatan")) {
       const limit = extractNumber(lower, 10);
