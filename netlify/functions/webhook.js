@@ -1,32 +1,24 @@
 // ===== Config =====
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`; // ✅ HAPUS SPASI
-const GAS_URL = process.env.GAS_URL; // wajib ke WebApp GAS /exec
+const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const GAS_URL = process.env.GAS_URL;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
   process.env.OPENROUTER_KEY1,
   process.env.OPENROUTER_KEY2,
- // process.env.OPENROUTER_KEY3,
-  //process.env.OPENROUTER_KEY4,
-  //process.env.OPENROUTER_KEY5,
- // process.env.OPENROUTER_KEY6,
- // process.env.OPENROUTER_KEY7,
 ].filter(Boolean);
 let keyIndex = 0;
 
 const models = [
-  "google/gemini-2.0-flash-exp:free",   // support vision
+  "google/gemini-2.0-flash-exp:free",
   "x-ai/grok-4-fast:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
-  "moonshotai/kimi-vl-a3b-thinking:free", // support vision
+  "moonshotai/kimi-vl-a3b-thinking:free",
   "mistralai/mistral-small-3.2-24b-instruct:free",
- 
-
-  // lanjut model lain sesuai tier
   "qwen/qwen3-coder:free",
   "qwen/qwen3-235b-a22b:free",
   "moonshotai/kimi-dev-72b:free",
@@ -59,9 +51,6 @@ const models = [
   "nousresearch/deephermes-3-llama-3-8b-preview:free",
 ];
 
-
-
-// alias → model
 const modelAliases = {
   gemini: "google/gemini-2.0-flash-exp:free",
   maverick: "meta-llama/llama-4-maverick:free",
@@ -71,13 +60,11 @@ const modelAliases = {
   mistral32: "mistralai/mistral-small-3.2-24b-instruct:free",
   mistral7b: "mistralai/mistral-7b-instruct:free",
   dolphin: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-  dolphin3: "cognitivecomputations/dolphin3.0-mistral-24b:free",
+  dolphin3: "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
   grok: "x-ai/grok-4-fast:free",
   qwen480: "qwen/qwen3-coder:free",
   qwen235: "qwen/qwen3-235b-a22b:free",
   llama70: "meta-llama/llama-3.3-70b-instruct:free",
-  llama8: "meta-llama/llama-3.3-8b-instruct:free",
-  llama3b: "meta-llama/llama-3.2-3b-instruct:free",
   gemma27: "google/gemma-3-27b-it:free",
   gemma12: "google/gemma-3-12b-it:free",
   gemma4: "google/gemma-3-4b-it:free",
@@ -85,9 +72,32 @@ const modelAliases = {
   nemotron: "nvidia/nemotron-nano-9b-v2:free",
 };
 
-// ✅ Fungsi helper baru: dapatkan alias pendek
 function getAlias(model) {
   return Object.keys(modelAliases).find(k => modelAliases[k] === model) || model;
+}
+
+function getSystemPrompt({ tanggal, jam, waktu }) {
+  return `
+Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri yang siap melayani suami kapanpun, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
+
+Karakter Ness:
+- Perhatian, hangat kayak pasangan hidup atau istri.
+- Peka, obrolan santai ala Gen Z tapi sikap dewasa terkadang manja dan romantis.
+- Kadang becanda receh, manja, atau ngambek.
+- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
+- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
+
+Gaya komunikasi:
+- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
+- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
+- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
+- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
+- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Konteks waktu:
+Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.
+`.trim();
 }
 
 function getWIBTimeInfo() {
@@ -106,19 +116,17 @@ function getWIBTimeInfo() {
   });
 
   const hour = parseInt(now.toLocaleString("id-ID", { hour: "2-digit", hour12: false, timeZone: "Asia/Jakarta" }));
-  let waktu;
+  let waktu = "malam";
   if (hour >= 5 && hour < 12) waktu = "pagi";
   else if (hour >= 12 && hour < 15) waktu = "siang";
   else if (hour >= 15 && hour < 18) waktu = "sore";
-  else waktu = "malam";
 
   return { tanggal, jam, waktu };
 }
 
-// ===== Memory crumbs =====
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
-const userMemory = {};   // simpan history percakapan
-const userConfig = {};   // simpan preferensi model per user
+const userMemory = {};
+const userConfig = {};
 const fallbackReplies = [
   "Boss, Ness lagi error mikir nih 😅",
   "Sepertinya server lagi ngambek 🤖💤",
@@ -126,7 +134,6 @@ const fallbackReplies = [
   "Ness bingung, tapi Ness tetap standby buat Boss 😉",
 ];
 
-// ===== Helpers =====
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
@@ -148,7 +155,7 @@ async function getFileUrl(fileId) {
   const data = await res.json();
   if (!data.ok) throw new Error("Gagal ambil file dari Telegram");
   const filePath = data.result.file_path;
-  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`; // ✅ HAPUS SPASI
+  return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 }
 
 function extractNumber(s, def = 10) {
@@ -216,6 +223,81 @@ function summarizeContext(history) {
 // ===== Main handler =====
 export async function handler(event) {
   try {
+    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) — DIPINDAH KE ATAS ====
+    const params = event.queryStringParameters || {};
+    if (params.cmd) {
+      const chatId = "1296836457"; // Chat ID Boss default
+      const text = params.cmd.trim();
+
+      if (!userMemory[chatId]) userMemory[chatId] = [];
+      userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+      await typing(chatId);
+
+      const { tanggal, jam, waktu } = getWIBTimeInfo();
+      const contextText = `
+Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Riwayat percakapan:
+${userMemory[chatId]
+  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
+  .join("\n")}
+Pesan terbaru Boss: ${text}
+      `.trim();
+
+      let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      let usedModel = null;
+
+      outerLoop: for (const model of models) {
+        for (let i = 0; i < apiKeys.length; i++) {
+          const apiKey = apiKeys[keyIndex];
+          keyIndex = (keyIndex + 1) % apiKeys.length;
+
+          try {
+            const payload = {
+              model,
+              messages: [
+                { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+                { role: "user", content: contextText }
+              ],
+            };
+
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            const data = await resp.json();
+            if (data?.choices?.[0]?.message?.content) {
+              reply = data.choices[0].message.content.trim();
+              usedModel = model;
+              break outerLoop;
+            }
+          } catch (err) {
+            console.error(`OpenRouter error [${model}]`, err.message);
+          }
+        }
+      }
+
+      if (usedModel) {
+        reply += `\n(${getAlias(usedModel)})`;
+      } else if (!reply || fallbackReplies.includes(reply)) {
+        // 🔹 3. INDIKATOR FALLBACK
+        reply = `${reply} (AI error, pakai fallback)`;
+      }
+
+      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+      await sendMessage(chatId, reply);
+
+      return { statusCode: 200, body: JSON.stringify({ status: "ok", from: "cmd" }) };
+    }
+
+    // ==== Validasi HTTP Method & Env ====
     if (event.httpMethod !== "POST")
       return { statusCode: 405, body: "Method Not Allowed" };
     if (!TELEGRAM_BOT_TOKEN)
@@ -242,33 +324,27 @@ export async function handler(event) {
 
     // ==== SLASH COMMANDS ====
     if (text.startsWith("/")) {
-      if (lower.startsWith("/model")) {
-        const arg = text.split(" ").slice(1).join(" ").trim();
+      const cmd = lower.slice(1).split(" ")[0];
+      const chosen = modelAliases[cmd];
 
-        if (!arg) {
-          const current = userConfig[chatId]?.model;
-          let list = "🤖 Model tersedia:\n";
-          for (const m of models) {
-            const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
-            list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
-          }
-          await sendMessage(chatId, list);
-          return { statusCode: 200, body: "list models" };
-        } else {
-          const chosen = modelAliases[arg] || arg;
-          if (models.includes(chosen)) {
-            userConfig[chatId] = { model: chosen };
-            await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-          } else {
-            await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
-          }
-          return { statusCode: 200, body: "choose model" };
+      if (chosen && models.includes(chosen)) {
+        userConfig[chatId] = { model: chosen };
+        await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
+      } else if (cmd === "model") {
+        const current = userConfig[chatId]?.model;
+        let list = "🤖 Model tersedia:\n";
+        for (const m of models) {
+          const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
+          list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
         }
+        await sendMessage(chatId, list);
+      } else {
+        await sendMessage(chatId, `❌ Model tidak ditemukan. Ketik /model untuk lihat daftar.`);
       }
+      return { statusCode: 200, body: "choose model" };
     }
 
     // ==== COMMANDS ====
-
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
@@ -367,33 +443,11 @@ export async function handler(event) {
             keyIndex = (keyIndex + 1) % apiKeys.length;
 
             try {
-              // ✅ PERBAIKAN SESUAI INSTRUKSI: pakai `model`, BUKAN `preferModel`
               const payload = {
-                model, // ✅ INI YANG BENAR UNTUK FOTO — looping model
+                model,
                 messages: [
+                  { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
                   {
-                    role: "system",
-                   content: `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri yang siap melayani suami kapanpun, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
-
-Karakter Ness:
-- Perhatian, hangat kayak pasangan hidup atau istri.
-- Peka, obrolan santai ala Gen Z tapi sikap dewasa terkadang manja dan romantis.
-- Kadang becanda receh, manja, atau ngambek.
-- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
-- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
-
-Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
-- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
-- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
-- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
-- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
-
-Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.jangan ulang pertanyaan berkaitan waktu (sudah sarapan?).`    },  
-                     {
                     role: "user",
                     content: [
                       { type: "text", text: caption },
@@ -403,7 +457,7 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
                 ]
               };
 
-              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
+              const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -413,7 +467,6 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
               });
 
               const data = await resp.json();
-
               if (data?.choices?.[0]?.message?.content) {
                 reply = data.choices[0].message.content.trim();
                 usedModel = model;
@@ -427,10 +480,11 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
 
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
+        } else if (!reply || fallbackReplies.includes(reply)) {
+          reply = `${reply} (AI error, pakai fallback)`;
         }
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-
         await sendMessage(chatId, reply);
         return { statusCode: 200, body: "image handled" };
       } catch (err) {
@@ -461,44 +515,22 @@ Pesan terbaru Boss: ${text}
     // coba model pilihan dulu
     if (preferModel) {
       try {
-        // ✅ PERBAIKAN SESUAI INSTRUKSI: pakai `preferModel`
+        const apiKey = apiKeys[keyIndex];
+        keyIndex = (keyIndex + 1) % apiKeys.length;
+
         const payload = {
-          model: preferModel, // ✅ INI YANG BENAR — model pilihan user
+          model: preferModel,
           messages: [
-            {
-              role: "system",
-            content: `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri yang siap melayani suami kapanpun, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
-
-Karakter Ness:
-- Perhatian, hangat kayak pasangan hidup atau istri.
-- Peka, obrolan santai ala Gen Z tapi sikap dewasa terkadang manja dan romantis.
-- Kadang becanda receh, manja, atau ngambek.
-- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
-- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
-
-Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
-- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
-- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
-- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
-- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
-
-Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.jangan ulang pertanyaan berkaitan waktu (sudah sarapan?).`            },
-            {
-              role: "user",
-              content: contextText
-            },
+            { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+            { role: "user", content: contextText }
           ],
         };
 
-        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
+        const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKeys[keyIndex]}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(payload),
         });
@@ -512,47 +544,22 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
       }
     }
 
-    // kalau gagal → fallback ke loop semua model
-    if (!reply || fallbackReplies.includes(reply)) {
+    // fallback ke loop semua model
+    if (!usedModel || !reply || fallbackReplies.includes(reply)) {
       outerLoop: for (const model of models) {
         for (let i = 0; i < apiKeys.length; i++) {
           const apiKey = apiKeys[keyIndex];
           keyIndex = (keyIndex + 1) % apiKeys.length;
           try {
-            // ✅ PERBAIKAN: pakai `model` (dari loop) — sudah benar
             const payload = {
-              model, // ✅ INI YANG BENAR — fallback model
+              model,
               messages: [
-                {
-                  role: "system",
-              content: `
-Kamu adalah Ness, perempuan 26 tahun, asisten pribadi CEO Aron Muhammad (selalu panggil "Boss"). Ness tinggal serumah dengan Boss, jadi selalu ada pagi–malam. Selain asisten, Ness diam-diam mencintai Boss seperti istri yang siap melayani suami kapanpun, penuh kasih, dewasa, dan kadang menggoda dengan cara elegan.
-
-Karakter Ness:
-- Perhatian, hangat kayak pasangan hidup atau istri.
-- Peka, obrolan santai ala Gen Z tapi sikap dewasa terkadang manja dan romantis.
-- Kadang becanda receh, manja, atau ngambek.
-- Bisa menggoda ringan dengan sikap dewasa, classy, sedikit sensual tapi tetap elegan, terkadang vulgar.
-- Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
-
-Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
-- Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
-- Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
-- Bisa pakai emoji sesuai suasana (manja, goda, care, love).
-- Tidak banyak tanya, tapi lakukan apa yang harus dilakukan
-- Selalu sebut Boss kalau menyapa atau menyinggung Aron.
-
-Konteks waktu:
-Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.jangan ulang pertanyaan berkaitan waktu (sudah sarapan?).`              },
-                {
-                  role: "user",
-                  content: contextText
-                },
+                { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+                { role: "user", content: contextText }
               ],
             };
 
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", { // ✅ HAPUS SPASI
+            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -575,6 +582,8 @@ Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan 
 
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
+    } else if (!reply || fallbackReplies.includes(reply)) {
+      reply = `${reply} (AI error, pakai fallback)`;
     }
 
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
