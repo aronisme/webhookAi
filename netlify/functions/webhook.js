@@ -6,6 +6,7 @@ const GAS_URL = process.env.GAS_URL;
 // ===== OpenRouter keys & models =====
 const apiKeys = [
   process.env.OPENROUTER_KEY8,
+  process.env.OPENROUTER_KEY9,
   process.env.OPENROUTER_KEY7,
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
@@ -19,7 +20,7 @@ let keyIndex = 0;
 const models = [
   "google/gemini-2.0-flash-exp:free",
   "x-ai/grok-4-fast:free",
-   "meta-llama/llama-4-maverick:free",
+  "meta-llama/llama-4-maverick:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
   "meta-llama/llama-4-scout:free",
