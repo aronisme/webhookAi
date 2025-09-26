@@ -18,7 +18,6 @@ const apiKeys = [
   process.env.OPENROUTER_KEY6,
   process.env.OPENROUTER_KEY5,
   process.env.OPENROUTER_KEY4,
-
 ].filter(Boolean);
 let keyIndex = 0;
 
@@ -113,48 +112,6 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-async function callHelperAI(text) {
-  const { tanggal, jam, waktu } = getWIBTimeInfo();
-
-  const helperPayload = {
-    model: "x-ai/grok-4-fast:free",
-    messages: [
-      {
-        role: "system",
-        content: `
-Kamu adalah AI ekstraktor khusus. Tugasmu:
-- Deteksi apakah input adalah perintah buat CATATAN, JADWAL, atau EVENT.
-- Jika YA, ubah ke format standar:
-  /catat isi
-  /jadwal YYYY-MM-DD HH:MM isi
-  /event YYYY-MM-DD HH:MM isi
-- Gunakan waktu realtime: sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
-  Jika user bilang "besok", "lusa", "hari ini", konversikan ke tanggal absolut (format YYYY-MM-DD).
-- Jika input bukan catatan/jadwal/event, balas hanya dengan "NO".
-        `.trim()
-      },
-      { role: "user", content: text }
-    ]
-  };
-
-  try {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKeys[0]}`,
-      },
-      body: JSON.stringify(helperPayload),
-    });
-
-    const data = await resp.json();
-    return data?.choices?.[0]?.message?.content?.trim() || "NO";
-  } catch (err) {
-    console.error("Helper AI error:", err.message);
-    return "NO";
-  }
-}
-
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
 const userMemory = {};
 const userConfig = {};
@@ -237,6 +194,43 @@ async function callGAS(payload) {
   } catch (err) {
     console.error("callGAS error:", err.message);
     throw err;
+  }
+}
+
+// ✅ 2️⃣ Tambah Fungsi callGemini
+async function callGemini(content, photoUrl = null) {
+  try {
+    const parts = [{ text: content }];
+
+    if (photoUrl) {
+      // Ambil file binary dari Telegram → base64
+      const res = await fetch(photoUrl);
+      const buf = await res.arrayBuffer();
+      const b64 = Buffer.from(buf).toString("base64");
+      // Deteksi mime type dari URL (asumsi .jpg/.jpeg/.png)
+      const isPng = photoUrl.toLowerCase().endsWith(".png");
+      parts.push({
+        inline_data: {
+          mime_type: isPng ? "image/png" : "image/jpeg",
+          data: b64
+        }
+      });
+    }
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_KEY1}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+      }
+    );
+
+    const data = await resp.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  } catch (err) {
+    console.error("Gemini API error:", err.message);
+    return null;
   }
 }
 
@@ -329,10 +323,19 @@ Pesan terbaru Boss: ${text}
         }
       }
 
+      // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini)
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
-      } else if (!reply || fallbackReplies.includes(reply)) {
-        reply = `${reply} (AI error, pakai fallback)`;
+      } else {
+        console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+
+        const geminiReply = await callGemini(contextText);
+        if (geminiReply) {
+          reply = geminiReply + "\n(Gemini API)";
+          usedModel = "google/gemini-1.5-flash";
+        } else {
+          reply = `${reply} (AI error total, pakai fallback)`;
+        }
       }
 
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -581,10 +584,19 @@ Pesan terbaru Boss: ${text}
           }
         }
 
+        // ✅ 4️⃣ Edit Bagian Chat + Gambar (fallback ke Gemini Vision)
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
-        } else if (!reply || fallbackReplies.includes(reply)) {
-          reply = `${reply} (AI error, pakai fallback)`;
+        } else {
+          console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API (vision)...");
+
+          const geminiReply = await callGemini(caption, photoUrl);
+          if (geminiReply) {
+            reply = geminiReply + "\n(Gemini API Vision)";
+            usedModel = "google/gemini-1.5-flash";
+          } else {
+            reply = `${reply} (AI error total, pakai fallback)`;
+          }
         }
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -596,16 +608,6 @@ Pesan terbaru Boss: ${text}
         return { statusCode: 200, body: "image error" };
       }
     }
-
-    // === FILTER DENGAN AI PEMBANTU ===
-  //  if (/\b(catat|catatan|jadwal|event|ingatkan|remind)\b/i.test(lower)) {
-    //  const helperReply = await callHelperAI(text);
-      //if (helperReply && helperReply !== "NO") {
-       // update.message.text = helperReply;
-        //const fakeEvent = { ...event, body: JSON.stringify(update) };
-       // return await handler(fakeEvent);
-     // }
-   // }
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -691,10 +693,19 @@ Pesan terbaru Boss: ${text}
       }
     }
 
+    // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini) — bagian akhir AI
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
-    } else if (!reply || fallbackReplies.includes(reply)) {
-      reply = `${reply} (AI error, pakai fallback)`;
+    } else {
+      console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+
+      const geminiReply = await callGemini(contextText);
+      if (geminiReply) {
+        reply = geminiReply + "\n(Gemini API)";
+        usedModel = "google/gemini-1.5-flash";
+      } else {
+        reply = `${reply} (AI error total, pakai fallback)`;
+      }
     }
 
     // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
