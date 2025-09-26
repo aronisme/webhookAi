@@ -5,7 +5,7 @@ const GAS_URL = process.env.GAS_URL;
 const BASE_URL = process.env.BASE_URL;
 
 // ===== Regex untuk command di mana saja =====
-const commandRegex = /\/(catat|jadwal|event|edit|lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(catat|event|edit|lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
