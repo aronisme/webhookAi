@@ -364,7 +364,7 @@ Pesan terbaru Boss: ${text}
     await typing(chatId);
 
     // ==== SLASH COMMANDS ====
-    //if (text.startsWith("/")) {
+    if (text.startsWith("/")) {
       // === /catat ===
       if (lower.startsWith("/catat")) {
         const content = text.split(" ").slice(1).join(" ").trim();
@@ -479,7 +479,7 @@ Pesan terbaru Boss: ${text}
         await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, /lihatcatat, /lihatjadwal, /lihatevent, atau /model.`);
       }
       return { statusCode: 200, body: "slash command handled" };
-    
+    }
 
     // ==== COMMANDS (non-slash) ====
     if (lower.startsWith("debug gas")) {
