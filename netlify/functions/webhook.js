@@ -153,8 +153,7 @@ function extractNumber(s, def = 10) {
 }
 
 function extractNoteContent(raw) {
-  const m = raw.match(/\b(catat|catatan|note)\b[:\s-]*(.+)/i);
-  return m ? m[2].trim() : "";
+  return "";
 }
 
 function coerceScheduleText(raw) {
@@ -487,49 +486,6 @@ Pesan terbaru Boss: ${text}
       return { statusCode: 200, body: "debug gas" };
     }
 
-    if (lower.includes("lihat catatan")) {
-      const limit = extractNumber(lower, 10);
-      try {
-        const data = await callGAS({ command: "listNotes", limit });
-        const notes = Array.isArray(data.notes) ? data.notes : [];
-        const lines = notes.length
-          ? notes.map((n) => n.human || n.content || JSON.stringify(n)).join("\n")
-          : "(kosong)";
-        await sendMessage(chatId, `Boss ✨ Catatan:\n${lines}`);
-      } catch (e) {
-        await sendMessage(chatId, `Boss ❌ gagal ambil catatan: ${e.message}`);
-      }
-      return { statusCode: 200, body: "list notes" };
-    }
-
-    if (/\b(jadwal(?:kan)?|ingatkan|remind)\b/i.test(lower)) {
-      const coerced = coerceScheduleText(text);
-      try {
-        const data = await callGAS({ command: "addSchedule", text: coerced });
-        await sendMessage(chatId, `Boss ✨ ${data.message || "Jadwal tersimpan."}`);
-      } catch (e) {
-        await sendMessage(chatId, `Boss ❌ gagal bikin jadwal: ${e.message}`);
-      }
-      return { statusCode: 200, body: "schedule route" };
-    }
-
-    if (lower.includes("lihat jadwal")) {
-      const limit = extractNumber(lower, 10);
-      try {
-        const data = await callGAS({ command: "listSchedule", limit });
-        const arr = Array.isArray(data.schedules) ? data.schedules : [];
-        const lines = arr.length
-          ? arr.map((s) =>
-              s.human ||
-              `${s.content} • ${new Date(s.execTime).toLocaleString("id-ID")} (${s.status})`
-            ).join("\n")
-          : "(kosong)";
-        await sendMessage(chatId, `Boss ✨ Jadwal:\n${lines}`);
-      } catch (e) {
-        await sendMessage(chatId, `Boss ❌ gagal ambil jadwal: ${e.message}`);
-      }
-      return { statusCode: 200, body: "list schedule" };
-    }
 
     if (lower === "hapus memori") {
       delete userMemory[chatId];
