@@ -2,6 +2,10 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const GAS_URL = process.env.GAS_URL;
+const BASE_URL = process.env.BASE_URL;
+
+// ===== Regex untuk command di mana saja =====
+const commandRegex = /\/(catat|jadwal|event|edit|lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -107,12 +111,11 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-// 🔹 AI Pembantu: deteksi & ekstrak catatan/jadwal/event
 async function callHelperAI(text) {
   const { tanggal, jam, waktu } = getWIBTimeInfo();
 
   const helperPayload = {
-    model: "x-ai/grok-4-fast:free", // model ringan, bisa diganti
+    model: "x-ai/grok-4-fast:free",
     messages: [
       {
         role: "system",
@@ -137,7 +140,7 @@ Kamu adalah AI ekstraktor khusus. Tugasmu:
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKeys[0]}`, // pakai key pertama
+        Authorization: `Bearer ${apiKeys[0]}`,
       },
       body: JSON.stringify(helperPayload),
     });
@@ -246,10 +249,9 @@ function summarizeContext(history) {
   return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
 }
 
-// 🔹 🔹 🔹 HELPER BARU: forwardToNote — DIPERBAIKI SESUAI PERMINTAAN
 async function forwardToNote(type, payload) {
   try {
-    const res = await fetch(`${process.env.BASE_URL}/.netlify/functions/note`, {
+    const res = await fetch(`${BASE_URL}/.netlify/functions/note`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, ...payload }),
@@ -265,10 +267,10 @@ async function forwardToNote(type, payload) {
 // ===== Main handler =====
 export async function handler(event) {
   try {
-    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) — DIPINDAH KE ATAS ====
+    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
     if (params.cmd) {
-      const chatId = "1296836457"; // Chat ID Boss default
+      const chatId = "1296836457";
       const text = params.cmd.trim();
 
       if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -345,6 +347,8 @@ Pesan terbaru Boss: ${text}
       return { statusCode: 500, body: "Missing TELEGRAM_BOT_TOKEN" };
     if (!GAS_URL)
       return { statusCode: 500, body: "Missing GAS_URL" };
+    if (!BASE_URL)
+      return { statusCode: 500, body: "Missing BASE_URL" };
 
     const update = JSON.parse(event.body || "{}");
     const message = update?.message;
@@ -363,67 +367,57 @@ Pesan terbaru Boss: ${text}
 
     await typing(chatId);
 
-    // ==== SLASH COMMANDS ====
-    if (text.startsWith("/")) {
-      // === /catat ===
-      if (lower.startsWith("/catat")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: /catat beli kopi ☕");
-          return { statusCode: 200, body: "empty note" };
-        }
+    // ==== ✅ SLASH COMMANDS BARU: REGEX DI MANA SAJA ====
+    let matched = false;
+    let match;
+    while ((match = commandRegex.exec(text)) !== null) {
+      matched = true;
+      const cmd = match[1].toLowerCase();
+      const args = match[2].trim();
 
-        const data = await forwardToNote("note", { content });
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ catatan tersimpan: ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal catat: ${data?.error || "unknown error"}`);
+      if (cmd === "catat") {
+        const content = args;
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi catatan dulu! Contoh: `/catat Beli susu|`");
+          continue;
         }
-        return { statusCode: 200, body: "note saved" };
+        const data = await forwardToNote("note", { content });
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ catatan tersimpan: ${content}`
+          : `Boss ❌ gagal catat: ${data?.error || "unknown error"}`);
       }
 
-      // === /jadwal ===
-      if (lower.startsWith("/jadwal")) {
-        const parts = text.split(" ").slice(1);
+      else if (cmd === "jadwal") {
+        const parts = args.split(/\s+/);
         if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: /jadwal YYYY-MM-DD HH:MM isi acara");
-          return { statusCode: 200, body: "bad schedule format" };
+          await sendMessage(chatId, "Boss, format: `/jadwal YYYY-MM-DD HH:MM isi acara|`");
+          continue;
         }
         const datetime = parts[0] + " " + parts[1];
         const content = parts.slice(2).join(" ");
         const data = await forwardToNote("schedule", { datetime, content });
-
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
-        }
-        return { statusCode: 200, body: "schedule saved" };
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
-      // === /event ===
-      if (lower.startsWith("/event")) {
-        const parts = text.split(" ").slice(1);
+      else if (cmd === "event") {
+        const parts = args.split(/\s+/);
         if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: /event YYYY-MM-DD HH:MM nama event");
-          return { statusCode: 200, body: "bad event format" };
+          await sendMessage(chatId, "Boss, format: `/event YYYY-MM-DD HH:MM nama event|`");
+          continue;
         }
         const datetime = parts[0] + " " + parts[1];
         const content = parts.slice(2).join(" ");
         const data = await forwardToNote("event", { datetime, content });
-
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ event tersimpan: ${datetime} • ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
-        }
-        return { statusCode: 200, body: "event saved" };
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ event tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
       }
 
-      // === Command Lihat Baru ===
-      if (lower.startsWith("/lihatcatat")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatcatat") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const notes = data?.data || [];
@@ -431,12 +425,11 @@ Pesan terbaru Boss: ${text}
           ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Catatan:\n${lines}`);
-        return { statusCode: 200, body: "lihat catat" };
       }
 
-      if (lower.startsWith("/lihatjadwal")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatjadwal") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const items = data?.data || [];
@@ -444,12 +437,11 @@ Pesan terbaru Boss: ${text}
           ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Jadwal:\n${lines}`);
-        return { statusCode: 200, body: "lihat jadwal" };
       }
 
-      if (lower.startsWith("/lihatevent")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatevent") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const items = data?.data || [];
@@ -457,31 +449,18 @@ Pesan terbaru Boss: ${text}
           ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
-        return { statusCode: 200, body: "lihat event" };
       }
 
-      // === Pemilihan model (fallback) ===
-      const cmd = lower.slice(1).split(" ")[0];
-      const chosen = modelAliases[cmd];
-
-      if (chosen && models.includes(chosen)) {
-        userConfig[chatId] = { model: chosen };
-        await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-      } else if (cmd === "model") {
-        const current = userConfig[chatId]?.model;
-        let list = "🤖 Model tersedia:\n";
-        for (const m of models) {
-          const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
-          list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
-        }
-        await sendMessage(chatId, list);
-      } else {
-        await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, /lihatcatat, /lihatjadwal, /lihatevent, atau /model.`);
+      else if (cmd === "edit") {
+        await sendMessage(chatId, "Boss, fitur /edit| belum tersedia. Tunggu update berikutnya ya 💖");
       }
-      return { statusCode: 200, body: "slash command handled" };
     }
 
-    // ==== COMMANDS (non-slash) ====
+    if (matched) {
+      return { statusCode: 200, body: "command(s) executed" };
+    }
+
+    // ==== COMMANDS NON-SLASH (fallback lama) ====
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
@@ -616,14 +595,11 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // === FILTER DENGAN AI PEMBANTU (HANYA JIKA ADA KATA KUNCI) ===
+    // === FILTER DENGAN AI PEMBANTU ===
     if (/\b(catat|catatan|jadwal|event|ingatkan|remind)\b/i.test(lower)) {
       const helperReply = await callHelperAI(text);
       if (helperReply && helperReply !== "NO") {
-        // Simulasikan input baru hasil parse helper
         update.message.text = helperReply;
-
-        // jalankan lagi blok "slash commands" di atas
         const fakeEvent = { ...event, body: JSON.stringify(update) };
         return await handler(fakeEvent);
       }
@@ -647,7 +623,6 @@ Pesan terbaru Boss: ${text}
     const preferModel = userConfig[chatId]?.model;
     let usedModel = null;
 
-    // coba model pilihan dulu
     if (preferModel) {
       try {
         const apiKey = apiKeys[keyIndex];
@@ -679,7 +654,6 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // fallback ke loop semua model
     if (!usedModel || !reply || fallbackReplies.includes(reply)) {
       outerLoop: for (const model of models) {
         for (let i = 0; i < apiKeys.length; i++) {
@@ -721,9 +695,24 @@ Pesan terbaru Boss: ${text}
       reply = `${reply} (AI error, pakai fallback)`;
     }
 
+    // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
+    const aiCommands = [...reply.matchAll(commandRegex)];
+    if (aiCommands.length > 0) {
+      for (const m of aiCommands) {
+        const fakeMessage = { ...message, text: m[0] };
+        const fakeUpdate = { ...update, message: fakeMessage };
+        const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
+        // Jalankan command dari AI
+        await handler(fakeEvent);
+      }
+      // Tetap kirim balasan asli AI juga
+      await sendMessage(chatId, reply);
+    } else {
+      await sendMessage(chatId, reply);
+    }
+
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
     userMemory[chatId] = summarizeContext(userMemory[chatId]);
-    await sendMessage(chatId, reply);
 
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
