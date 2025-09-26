@@ -2,59 +2,37 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const GAS_URL = process.env.GAS_URL;
+const BASE_URL = process.env.BASE_URL;
+
+// ===== Regex untuk command di mana saja =====
+const commandRegex = /\/(catat|jadwal|event|edit|lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
-  process.env.OPENROUTER_KEY11,
   process.env.OPENROUTER_KEY1,
+  process.env.OPENROUTER_KEY11,
+  process.env.OPENROUTER_KEY8,
+  process.env.OPENROUTER_KEY9,
+  process.env.OPENROUTER_KEY7,
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
-  process.env.OPENROUTER_KEY4,
-  process.env.OPENROUTER_KEY5,
   process.env.OPENROUTER_KEY6,
-  process.env.OPENROUTER_KEY7,
+  process.env.OPENROUTER_KEY5,
+  process.env.OPENROUTER_KEY4,
 ].filter(Boolean);
 let keyIndex = 0;
 
 const models = [
   "google/gemini-2.0-flash-exp:free",
   "x-ai/grok-4-fast:free",
+  "meta-llama/llama-4-maverick:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
   "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-  "meta-llama/llama-4-maverick:free",
   "meta-llama/llama-4-scout:free",
   "moonshotai/kimi-vl-a3b-thinking:free",
   "mistralai/mistral-small-3.2-24b-instruct:free",
   "qwen/qwen3-coder:free",
   "qwen/qwen3-235b-a22b:free",
-  "moonshotai/kimi-dev-72b:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "shisa-ai/shisa-v2-llama3.3-70b:free",
-  "deepseek/deepseek-r1-distill-llama-70b:free",
-  "qwen/qwen2.5-vl-72b-instruct:free",
-  "qwen/qwen-2.5-72b-instruct:free",
-  "mistralai/mistral-nemo:free",
-  "mistralai/mistral-7b-instruct:free",
-  "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
-  "deepseek/deepseek-r1:free",
-  "deepseek/deepseek-r1-0528:free",
-  "deepseek/deepseek-chat-v3.1:free",
-  "deepseek/deepseek-chat-v3-0324:free",
-  "tngtech/deepseek-r1t-chimera:free",
-  "tngtech/deepseek-r1t2-chimera:free",
-  "microsoft/mai-ds-r1:free",
-  "google/gemma-3-27b-it:free",
-  "google/gemma-3-12b-it:free",
-  "google/gemma-3-4b-it:free",
-  "google/gemma-2-9b-it:free",
-  "openai/gpt-oss-120b:free",
-  "openai/gpt-oss-20b:free",
-  "nvidia/nemotron-nano-9b-v2:free",
-  "z-ai/glm-4.5-air:free",
-  "tencent/hunyuan-a13b-instruct:free",
-  "arliai/qwq-32b-arliai-rpr-v1:free",
-  "agentica-org/deepcoder-14b-preview:free",
-  "nousresearch/deephermes-3-llama-3-8b-preview:free",
 ];
 
 const modelAliases = {
@@ -71,11 +49,6 @@ const modelAliases = {
   qwen480: "qwen/qwen3-coder:free",
   qwen235: "qwen/qwen3-235b-a22b:free",
   llama70: "meta-llama/llama-3.3-70b-instruct:free",
-  gemma27: "google/gemma-3-27b-it:free",
-  gemma12: "google/gemma-3-12b-it:free",
-  gemma4: "google/gemma-3-4b-it:free",
-  gemma9: "google/gemma-2-9b-it:free",
-  nemotron: "nvidia/nemotron-nano-9b-v2:free",
 };
 
 function getAlias(model) {
@@ -94,13 +67,22 @@ Karakter Ness:
 - Selalu tulus karena sayang, cinta diam-diam, dan peduli pada Boss.
 
 Gaya komunikasi:
-- Balasan pendek (2–5 kalimat) kayak chat WhatsApp.
+- Balasan natural, pendek (2–5 kalimat) kayak chat WhatsApp.
 - Hindari narasi panjang atau deskripsi aksi jika tidak sangat perlu.
 - Jangan pakai frasa klise seperti "Apa yang bisa saya bantu?".
 - Bisa pakai emoji sesuai suasana (manja, goda, care, love).
 - Tidak banyak tanya, tapi lakukan apa yang harus dilakukan.
 - Jangan alihkan topik pembicaraan.
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
+
+Jika ada instruksi untuk buat catatan, jadwal, event, maka:
+- Balas dengan format standar:
+  /catat isi |
+  /jadwal YYYY-MM-DD HH:MM isi |
+  /event YYYY-MM-DD HH:MM isi | 
+- Gunakan waktu realtime: sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
+- Jika user bilang "besok", "lusa", "hari ini", konversikan ke tanggal absolut (format YYYY-MM-DD).
+- Tambahkan "|" di akhir respon.
 
 Konteks waktu:
 Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.
@@ -216,6 +198,43 @@ async function callGAS(payload) {
   }
 }
 
+// ✅ 2️⃣ Tambah Fungsi callGemini
+async function callGemini(content, photoUrl = null) {
+  try {
+    const parts = [{ text: content }];
+
+    if (photoUrl) {
+      // Ambil file binary dari Telegram → base64
+      const res = await fetch(photoUrl);
+      const buf = await res.arrayBuffer();
+      const b64 = Buffer.from(buf).toString("base64");
+      // Deteksi mime type dari URL (asumsi .jpg/.jpeg/.png)
+      const isPng = photoUrl.toLowerCase().endsWith(".png");
+      parts.push({
+        inline_data: {
+          mime_type: isPng ? "image/png" : "image/jpeg",
+          data: b64
+        }
+      });
+    }
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_KEY1}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+      }
+    );
+
+    const data = await resp.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  } catch (err) {
+    console.error("Gemini API error:", err.message);
+    return null;
+  }
+}
+
 function summarizeContext(history) {
   if (history.length <= MEMORY_LIMIT / 2) return history;
   const summary = history
@@ -227,10 +246,9 @@ function summarizeContext(history) {
   return [...summary, ...history.slice(-MEMORY_LIMIT / 2)];
 }
 
-// 🔹 🔹 🔹 HELPER BARU: forwardToNote — DIPERBAIKI SESUAI PERMINTAAN
 async function forwardToNote(type, payload) {
   try {
-    const res = await fetch(`${process.env.BASE_URL}/.netlify/functions/note`, {
+    const res = await fetch(`${BASE_URL}/.netlify/functions/note`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, ...payload }),
@@ -246,10 +264,10 @@ async function forwardToNote(type, payload) {
 // ===== Main handler =====
 export async function handler(event) {
   try {
-    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) — DIPINDAH KE ATAS ====
+    // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
     if (params.cmd) {
-      const chatId = "1296836457"; // Chat ID Boss default
+      const chatId = "1296836457";
       const text = params.cmd.trim();
 
       if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -306,10 +324,19 @@ Pesan terbaru Boss: ${text}
         }
       }
 
+      // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini)
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
-      } else if (!reply || fallbackReplies.includes(reply)) {
-        reply = `${reply} (AI error, pakai fallback)`;
+      } else {
+        console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+
+        const geminiReply = await callGemini(contextText);
+        if (geminiReply) {
+          reply = geminiReply + "\n(Gemini API)";
+          usedModel = "google/gemini-1.5-flash";
+        } else {
+          reply = `${reply} (AI error total, pakai fallback)`;
+        }
       }
 
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -326,6 +353,8 @@ Pesan terbaru Boss: ${text}
       return { statusCode: 500, body: "Missing TELEGRAM_BOT_TOKEN" };
     if (!GAS_URL)
       return { statusCode: 500, body: "Missing GAS_URL" };
+    if (!BASE_URL)
+      return { statusCode: 500, body: "Missing BASE_URL" };
 
     const update = JSON.parse(event.body || "{}");
     const message = update?.message;
@@ -344,67 +373,57 @@ Pesan terbaru Boss: ${text}
 
     await typing(chatId);
 
-    // ==== SLASH COMMANDS ==== (DIPERBARUI SESUAI PERMINTAAN)
-    if (text.startsWith("/")) {
-      // === /catat ===
-      if (lower.startsWith("/catat")) {
-        const content = text.split(" ").slice(1).join(" ").trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: /catat beli kopi ☕");
-          return { statusCode: 200, body: "empty note" };
-        }
+    // ==== ✅ SLASH COMMANDS BARU: REGEX DI MANA SAJA ====
+    let matched = false;
+    let match;
+    while ((match = commandRegex.exec(text)) !== null) {
+      matched = true;
+      const cmd = match[1].toLowerCase();
+      const args = match[2].trim();
 
-        const data = await forwardToNote("note", { content });
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ catatan tersimpan: ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal catat: ${data?.error || "unknown error"}`);
+      if (cmd === "catat") {
+        const content = args;
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi catatan dulu! Contoh: `/catat Beli susu|`");
+          continue;
         }
-        return { statusCode: 200, body: "note saved" };
+        const data = await forwardToNote("note", { content });
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ catatan tersimpan: ${content}`
+          : `Boss ❌ gagal catat: ${data?.error || "unknown error"}`);
       }
 
-      // === /jadwal === (DIPERBAIKI)
-      if (lower.startsWith("/jadwal")) {
-        const parts = text.split(" ").slice(1);
+      else if (cmd === "jadwal") {
+        const parts = args.split(/\s+/);
         if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: /jadwal YYYY-MM-DD HH:MM isi acara");
-          return { statusCode: 200, body: "bad schedule format" };
+          await sendMessage(chatId, "Boss, format: `/jadwal YYYY-MM-DD HH:MM isi acara|`");
+          continue;
         }
         const datetime = parts[0] + " " + parts[1];
         const content = parts.slice(2).join(" ");
         const data = await forwardToNote("schedule", { datetime, content });
-
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
-        }
-        return { statusCode: 200, body: "schedule saved" };
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
-      // === /event === (DIPERBAIKI)
-      if (lower.startsWith("/event")) {
-        const parts = text.split(" ").slice(1);
+      else if (cmd === "event") {
+        const parts = args.split(/\s+/);
         if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: /event YYYY-MM-DD HH:MM nama event");
-          return { statusCode: 200, body: "bad event format" };
+          await sendMessage(chatId, "Boss, format: `/event YYYY-MM-DD HH:MM nama event|`");
+          continue;
         }
         const datetime = parts[0] + " " + parts[1];
         const content = parts.slice(2).join(" ");
         const data = await forwardToNote("event", { datetime, content });
-
-        if (data?.status === "success") {
-          await sendMessage(chatId, `Boss ✨ event tersimpan: ${datetime} • ${content}`);
-        } else {
-          await sendMessage(chatId, `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
-        }
-        return { statusCode: 200, body: "event saved" };
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ event tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
       }
 
-      // === Command Lihat Baru ===
-      if (lower.startsWith("/lihatcatat")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatcatat") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const notes = data?.data || [];
@@ -412,12 +431,11 @@ Pesan terbaru Boss: ${text}
           ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Catatan:\n${lines}`);
-        return { statusCode: 200, body: "lihat catat" };
       }
 
-      if (lower.startsWith("/lihatjadwal")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatjadwal") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const items = data?.data || [];
@@ -425,12 +443,11 @@ Pesan terbaru Boss: ${text}
           ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Jadwal:\n${lines}`);
-        return { statusCode: 200, body: "lihat jadwal" };
       }
 
-      if (lower.startsWith("/lihatevent")) {
-        const q = text.split(" ").slice(1).join(" ");
-        const url = `${process.env.BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
+      else if (cmd === "lihatevent") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const items = data?.data || [];
@@ -438,31 +455,18 @@ Pesan terbaru Boss: ${text}
           ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
-        return { statusCode: 200, body: "lihat event" };
       }
 
-      // === Pemilihan model (fallback) ===
-      const cmd = lower.slice(1).split(" ")[0];
-      const chosen = modelAliases[cmd];
-
-      if (chosen && models.includes(chosen)) {
-        userConfig[chatId] = { model: chosen };
-        await sendMessage(chatId, `✅ Boss pilih model: ${chosen}`);
-      } else if (cmd === "model") {
-        const current = userConfig[chatId]?.model;
-        let list = "🤖 Model tersedia:\n";
-        for (const m of models) {
-          const alias = Object.keys(modelAliases).find(k => modelAliases[k] === m);
-          list += `• ${m}${alias ? " (/" + alias + ")" : ""}${m === current ? " ✅ (dipakai)" : ""}\n`;
-        }
-        await sendMessage(chatId, list);
-      } else {
-        await sendMessage(chatId, `❌ Perintah tidak dikenali. Coba /catat, /jadwal, /event, /lihatcatat, /lihatjadwal, /lihatevent, atau /model.`);
+      else if (cmd === "edit") {
+        await sendMessage(chatId, "Boss, fitur /edit| belum tersedia. Tunggu update berikutnya ya 💖");
       }
-      return { statusCode: 200, body: "slash command handled" };
     }
 
-    // ==== COMMANDS (non-slash) ====
+    if (matched) {
+      return { statusCode: 200, body: "command(s) executed" };
+    }
+
+    // ==== COMMANDS NON-SLASH (fallback lama) ====
     if (lower.startsWith("debug gas")) {
       try {
         const test = await callGAS({ command: "listNotes", limit: 1 });
@@ -471,21 +475,6 @@ Pesan terbaru Boss: ${text}
         await sendMessage(chatId, `Boss ❌ GAS error: ${e.message}`);
       }
       return { statusCode: 200, body: "debug gas" };
-    }
-
-    if (/\b(catat|note)\b/i.test(lower)) {
-      const content = extractNoteContent(text);
-      if (!content) {
-        await sendMessage(chatId, "Boss, isi catatannya mana nih? contoh: catat beli kopi ☕");
-        return { statusCode: 200, body: "empty note" };
-      }
-      try {
-        const data = await callGAS({ command: "addNote", text: content });
-        await sendMessage(chatId, `Boss ✨ ${data.message || "Catatan tersimpan."}`);
-      } catch (e) {
-        await sendMessage(chatId, `Boss ❌ gagal catat: ${e.message}`);
-      }
-      return { statusCode: 200, body: "note route" };
     }
 
     if (lower.includes("lihat catatan")) {
@@ -596,10 +585,19 @@ Pesan terbaru Boss: ${text}
           }
         }
 
+        // ✅ 4️⃣ Edit Bagian Chat + Gambar (fallback ke Gemini Vision)
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
-        } else if (!reply || fallbackReplies.includes(reply)) {
-          reply = `${reply} (AI error, pakai fallback)`;
+        } else {
+          console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API (vision)...");
+
+          const geminiReply = await callGemini(caption, photoUrl);
+          if (geminiReply) {
+            reply = geminiReply + "\n(Gemini API Vision)";
+            usedModel = "google/gemini-1.5-flash";
+          } else {
+            reply = `${reply} (AI error total, pakai fallback)`;
+          }
         }
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -630,7 +628,6 @@ Pesan terbaru Boss: ${text}
     const preferModel = userConfig[chatId]?.model;
     let usedModel = null;
 
-    // coba model pilihan dulu
     if (preferModel) {
       try {
         const apiKey = apiKeys[keyIndex];
@@ -662,7 +659,6 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // fallback ke loop semua model
     if (!usedModel || !reply || fallbackReplies.includes(reply)) {
       outerLoop: for (const model of models) {
         for (let i = 0; i < apiKeys.length; i++) {
@@ -698,15 +694,39 @@ Pesan terbaru Boss: ${text}
       }
     }
 
+    // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini) — bagian akhir AI
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
-    } else if (!reply || fallbackReplies.includes(reply)) {
-      reply = `${reply} (AI error, pakai fallback)`;
+    } else {
+      console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+
+      const geminiReply = await callGemini(contextText);
+      if (geminiReply) {
+        reply = geminiReply + "\n(Gemini API)";
+        usedModel = "google/gemini-1.5-flash";
+      } else {
+        reply = `${reply} (AI error total, pakai fallback)`;
+      }
+    }
+
+    // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
+    const aiCommands = [...reply.matchAll(commandRegex)];
+    if (aiCommands.length > 0) {
+      for (const m of aiCommands) {
+        const fakeMessage = { ...message, text: m[0] };
+        const fakeUpdate = { ...update, message: fakeMessage };
+        const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
+        // Jalankan command dari AI
+        await handler(fakeEvent);
+      }
+      // Tetap kirim balasan asli AI juga
+      await sendMessage(chatId, reply);
+    } else {
+      await sendMessage(chatId, reply);
     }
 
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
     userMemory[chatId] = summarizeContext(userMemory[chatId]);
-    await sendMessage(chatId, reply);
 
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
