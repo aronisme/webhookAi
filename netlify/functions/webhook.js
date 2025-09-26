@@ -9,6 +9,7 @@ const commandRegex = /\/(catat|jadwal|event|edit|lihatcatat|lihatjadwal|lihateve
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
+  process.env.OPENROUTER_KEY1,
   process.env.OPENROUTER_KEY8,
   process.env.OPENROUTER_KEY9,
   process.env.OPENROUTER_KEY7,
@@ -17,7 +18,7 @@ const apiKeys = [
   process.env.OPENROUTER_KEY6,
   process.env.OPENROUTER_KEY5,
   process.env.OPENROUTER_KEY4,
-  process.env.OPENROUTER_KEY1,
+
 ].filter(Boolean);
 let keyIndex = 0;
 
