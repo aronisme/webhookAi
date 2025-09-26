@@ -422,28 +422,38 @@ Pesan terbaru Boss: ${text}
       }
 
       else if (cmd === "lihatcatat") {
-        const q = args;
-        const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const notes = data?.data || [];
-        const lines = notes.length
-          ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
-          : "(kosong)";
-        await sendMessage(chatId, `Boss ✨ Catatan:\n${lines}`);
-      }
+  const q = args;
+  const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  const notes = data?.data || [];
+  const lines = notes.length
+    ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
+    : "(kosong)";
+  const reply = `Boss ✨ Catatan:\n${lines}`;
+  await sendMessage(chatId, reply);
 
-      else if (cmd === "lihatjadwal") {
-        const q = args;
-        const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const items = data?.data || [];
-        const lines = items.length
-          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
-          : "(kosong)";
-        await sendMessage(chatId, `Boss ✨ Jadwal:\n${lines}`);
-      }
+  if (!userMemory[chatId]) userMemory[chatId] = [];
+  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+}
+
+
+    else if (cmd === "lihatjadwal") {
+  const q = args;
+  const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  const items = data?.data || [];
+  const lines = items.length
+    ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
+    : "(kosong)";
+  const reply = `Boss ✨ Jadwal:\n${lines}`;
+  await sendMessage(chatId, reply);
+
+  if (!userMemory[chatId]) userMemory[chatId] = [];
+  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+}
+
 
       else if (cmd === "lihatevent") {
         const q = args;
