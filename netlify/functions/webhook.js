@@ -113,7 +113,7 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
 const userMemory = {};
 const userConfig = {};
 const fallbackReplies = [
