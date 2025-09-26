@@ -104,13 +104,13 @@ async function callHelperAI(text) {
   const { tanggal, jam, waktu } = getWIBTimeInfo();
 
   const helperPayload = {
-    model: "mistralai/mistral-7b-instruct:free", // model ringan, bisa diganti
+    model: "x-ai/grok-4-fast:free", // model ringan, bisa diganti
     messages: [
       {
         role: "system",
         content: `
 Kamu adalah AI ekstraktor khusus. Tugasmu:
-- Deteksi apakah input adalah CATATAN, JADWAL, atau EVENT.
+- Deteksi apakah input adalah perintah buat CATATAN, JADWAL, atau EVENT.
 - Jika YA, ubah ke format standar:
   /catat isi
   /jadwal YYYY-MM-DD HH:MM isi
@@ -484,7 +484,6 @@ Pesan terbaru Boss: ${text}
       return { statusCode: 200, body: "debug gas" };
     }
 
-
     if (lower.includes("lihat catatan")) {
       const limit = extractNumber(lower, 10);
       try {
@@ -609,16 +608,18 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // === FILTER DENGAN AI PEMBANTU ===
-const helperReply = await callHelperAI(text);
-if (helperReply && helperReply !== "NO") {
-  // Simulasikan input baru hasil parse helper
-  update.message.text = helperReply;
+    // === FILTER DENGAN AI PEMBANTU (HANYA JIKA ADA KATA KUNCI) ===
+    if (/\b(catat|catatan|jadwal|event|ingatkan|remind)\b/i.test(lower)) {
+      const helperReply = await callHelperAI(text);
+      if (helperReply && helperReply !== "NO") {
+        // Simulasikan input baru hasil parse helper
+        update.message.text = helperReply;
 
-  // jalankan lagi blok "slash commands" di atas
-  const fakeEvent = { ...event, body: JSON.stringify(update) };
-  return await handler(fakeEvent);
-}
+        // jalankan lagi blok "slash commands" di atas
+        const fakeEvent = { ...event, body: JSON.stringify(update) };
+        return await handler(fakeEvent);
+      }
+    }
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
