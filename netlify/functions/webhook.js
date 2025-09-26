@@ -111,6 +111,48 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
+async function callHelperAI(text) {
+  const { tanggal, jam, waktu } = getWIBTimeInfo();
+
+  const helperPayload = {
+    model: "x-ai/grok-4-fast:free",
+    messages: [
+      {
+        role: "system",
+        content: `
+Kamu adalah AI ekstraktor khusus. Tugasmu:
+- Deteksi apakah input adalah perintah buat CATATAN, JADWAL, atau EVENT.
+- Jika YA, ubah ke format standar:
+  /catat isi
+  /jadwal YYYY-MM-DD HH:MM isi
+  /event YYYY-MM-DD HH:MM isi
+- Gunakan waktu realtime: sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
+  Jika user bilang "besok", "lusa", "hari ini", konversikan ke tanggal absolut (format YYYY-MM-DD).
+- Jika input bukan catatan/jadwal/event, balas hanya dengan "NO".
+        `.trim()
+      },
+      { role: "user", content: text }
+    ]
+  };
+
+  try {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKeys[0]}`,
+      },
+      body: JSON.stringify(helperPayload),
+    });
+
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content?.trim() || "NO";
+  } catch (err) {
+    console.error("Helper AI error:", err.message);
+    return "NO";
+  }
+}
+
 const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 40;
 const userMemory = {};
 const userConfig = {};
@@ -553,15 +595,15 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // ❌ BAGIAN INI SUDAH DIHAPUS: FILTER DENGAN AI PEMBANTU
-    // if (/\b(catat|catatan|jadwal|event|ingatkan|remind)\b/i.test(lower)) {
-    //   const helperReply = await callHelperAI(text);
-    //   if (helperReply && helperReply !== "NO") {
-    //     update.message.text = helperReply;
-    //     const fakeEvent = { ...event, body: JSON.stringify(update) };
-    //     return await handler(fakeEvent);
-    //   }
-    // }
+    // === FILTER DENGAN AI PEMBANTU ===
+  //  if (/\b(catat|catatan|jadwal|event|ingatkan|remind)\b/i.test(lower)) {
+    //  const helperReply = await callHelperAI(text);
+      //if (helperReply && helperReply !== "NO") {
+       // update.message.text = helperReply;
+        //const fakeEvent = { ...event, body: JSON.stringify(update) };
+       // return await handler(fakeEvent);
+     // }
+   // }
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -674,4 +716,7 @@ Pesan terbaru Boss: ${text}
 
     return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
-  
+    console.error("Error Ness webhook:", err);
+    return { statusCode: 500, body: "Internal Server Error" };
+  }
+}
