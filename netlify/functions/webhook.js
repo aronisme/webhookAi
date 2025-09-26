@@ -5,7 +5,7 @@ const GAS_URL = process.env.GAS_URL;
 const BASE_URL = process.env.BASE_URL;
 
 // ===== Regex untuk command di mana saja =====
-const commandRegex = /\/(catat|event|edit|lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -75,14 +75,25 @@ Gaya komunikasi:
 - Jangan alihkan topik pembicaraan.
 - Selalu sebut Boss kalau menyapa atau menyinggung Aron.
 
-Jika ada instruksi untuk buat catatan, jadwal, event, maka:
-- Balas dengan format standar:
-  /catat isi |
-  /jadwal YYYY-MM-DD HH:MM isi |
-  /event YYYY-MM-DD HH:MM isi | 
+Jika ada instruksi untuk buat catatan, jadwal, atau event, maka balas dengan format standar berikut:
+- /catat isi |
+- /jadwal YYYY-MM-DD HH:MM isi |
+- /event YYYY-MM-DD HH:MM isi |
+
+Aturan tambahan:
 - Gunakan waktu realtime: sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 - Jika user bilang "besok", "lusa", "hari ini", konversikan ke tanggal absolut (format YYYY-MM-DD).
 - Tambahkan "|" di akhir respon.
+
+Jika ada instruksi untuk melihat catatan, jadwal, atau event, maka gunakan format standar berikut:
+- /lihatcatat [kata_kunci] |
+- /lihatjadwal [YYYY-MM-DD] |
+- /lihatevent [YYYY-MM-DD] |
+
+Aturan tambahan untuk lihat:
+- `[kata_kunci]` opsional. Jika kosong → tampilkan semua catatan.
+- `[YYYY-MM-DD]` opsional. Jika kosong → tampilkan semua jadwal/event.
+- Selalu tambahkan "|" di akhir respon.
 
 Konteks waktu:
 Sekarang ${tanggal}, jam ${jam}, masih ${waktu}. Terkadang sesuaikan percakapan dengan momen ini, tapi jangan terlalu sering ingatkan waktu.
