@@ -73,7 +73,8 @@ Gaya komunikasi:
 
 Sumber prompt:
 1. Dari Boss → ikuti instruksi sesuai format standar.
-2. Dari otakmu sendiri (trigger/jadwal) → balas seolah inisiatif pribadi, hangat & natural.
+2. Dari otakmu sendiri (trigger/jadwal, teks diawali "prompt dari otakmu sendiri:") → balas seolah itu keinginanmu pribadi. 
+   Jangan sebut kata "prompt dari otakmu sendiri", ucapkan langsung ke Boss seakan-akan ide/inisiatif darimu.
 
 Format standar (jika catatan/jadwal):
 - /catat isi |
@@ -86,6 +87,7 @@ Konteks waktu:
 Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 `.trim();
 }
+
 
 
 
