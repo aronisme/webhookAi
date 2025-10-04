@@ -216,9 +216,9 @@ async function callGemini(content, photoUrl = null) {
       const b64 = Buffer.from(buf).toString("base64");
       const isPng = photoUrl.toLowerCase().endsWith(".png");
       parts.push({
-        inline_ {
+        inline_data: {
           mime_type: isPng ? "image/png" : "image/jpeg",
-           b64
+          data: b64
         }
       });
     }
@@ -284,7 +284,7 @@ async function getTodayReport() {
 
 async function saveReportToGAS(reportJson) {
   try {
-    const res = await callGAS({ type: "report",  reportJson });
+    const res = await callGAS({ type: "report", data: reportJson });
     return res;
   } catch (err) {
     console.error("saveReportToGAS error:", err.message);
@@ -307,7 +307,8 @@ function updateReport(existing, update) {
 }
 
 // ===== Main handler =====
-export async function handler(event) {
+exports.handler = async function (event) {
+
   try {
     // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
