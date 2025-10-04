@@ -772,26 +772,21 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
-    const aiCommands = [...reply.matchAll(commandRegex)];
-    if (aiCommands.length > 0) {
-      for (const m of aiCommands) {
-        const fakeMessage = { ...message, text: m[0] };
-        const fakeUpdate = { ...update, message: fakeMessage };
-        const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
-        await handler(fakeEvent);
-      }
-      await sendMessage(chatId, reply);
-    } else {
-      await sendMessage(chatId, reply);
-    }
-
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    userMemory[chatId] = summarizeContext(userMemory[chatId]);
-
-    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
-  } catch (err) {
-    console.error("Error Ness webhook:", err);
-    return { statusCode: 500, body: "Internal Server Error" };
+   // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
+const aiCommands = [...reply.matchAll(commandRegex)];
+if (aiCommands.length > 0) {
+  console.log(`Detected ${aiCommands.length} embedded command(s) in AI reply`);
+  for (const m of aiCommands) {
+    const fakeMessage = { ...message, text: m[0] };
+    const fakeUpdate = { ...update, message: fakeMessage };
+    const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
+    await new Promise(r => setTimeout(r, 200)); // biar nggak kena limit
+    await exports.handler(fakeEvent);
   }
 }
+await sendMessage(chatId, reply);
+
+userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
