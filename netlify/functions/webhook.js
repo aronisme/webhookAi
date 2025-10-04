@@ -194,15 +194,13 @@ async function callGemini(content, photoUrl = null) {
     }
 
     const resp = await fetch(
-      const resp = await fetch(
   `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_KEY1}`,
   {
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts }] }),
-      }
-    );
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+  }
+);
 
     const data = await resp.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
