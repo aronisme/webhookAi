@@ -491,43 +491,53 @@ Pesan terbaru Boss: ${text}
         await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
       }
 
-      // ===== /laporan =====
       else if (cmd === "laporan") {
-        try {
-          const raw = args.trim();
-          if (!raw) {
-            await sendMessage(chatId, "Boss, isi JSON laporan dulu ya! Contoh: `/laporan {\"task\": [...]}|`");
-            continue;
-          }
+  try {
+    const raw = args.trim();
+    if (!raw) {
+      await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
+      continue;
+    }
 
-          let json;
-          try {
-            json = JSON.parse(raw);
-          } catch (e) {
-            await sendMessage(chatId, "Boss ❌ format laporan harus JSON valid!");
-            continue;
-          }
+    // 🧩 Kalau bukan JSON, simpan sebagai catatan teks biasa
+    if (!raw.startsWith("{")) {
+      const data = await forwardToNote("report", { content: raw });
+      await sendMessage(chatId, data?.status === "success"
+        ? `Boss ✨ laporan tersimpan (${getWIBTimeInfo().tanggal}): ${raw}`
+        : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
+      continue;
+    }
 
-          const todayReport = await getTodayReport();
-          let finalReport = json;
+    // 🧩 Kalau JSON valid, proses seperti biasa
+    let json;
+    try {
+      json = JSON.parse(raw);
+    } catch (e) {
+      await sendMessage(chatId, "Boss ❌ format laporan harus JSON valid!");
+      continue;
+    }
 
-          if (todayReport) {
-            finalReport = updateReport(todayReport, json);
-            await sendMessage(chatId, "Boss 📝 laporan hari ini sudah ada, aku update ya...");
-          } else {
-            await sendMessage(chatId, "Boss 🆕 ini laporan baru hari ini ya...");
-          }
+    const todayReport = await getTodayReport();
+    let finalReport = json;
 
-          finalReport.tanggal = finalReport.tanggal || getWIBTimeInfo().tanggal;
-          const data = await saveReportToGAS(finalReport);
+    if (todayReport) {
+      finalReport = updateReport(todayReport, json);
+      await sendMessage(chatId, "Boss 📝 laporan hari ini sudah ada, aku update ya...");
+    } else {
+      await sendMessage(chatId, "Boss 🆕 ini laporan baru hari ini ya...");
+    }
 
-          await sendMessage(chatId, data?.ok !== false
-            ? `Boss ✨ laporan tersimpan (${finalReport.tanggal})`
-            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
-        } catch (err) {
-          await sendMessage(chatId, `Boss ⚠️ error laporan: ${err.message}`);
-        }
-      }
+    finalReport.tanggal = finalReport.tanggal || getWIBTimeInfo().tanggal;
+    const data = await saveReportToGAS(finalReport);
+
+    await sendMessage(chatId, data?.ok !== false
+      ? `Boss ✨ laporan JSON tersimpan (${finalReport.tanggal})`
+      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
+  } catch (err) {
+    await sendMessage(chatId, `Boss ⚠️ error laporan: ${err.message}`);
+  }
+}
+
 
       // ===== /lihatlaporan =====
       else if (cmd === "lihatlaporan") {
