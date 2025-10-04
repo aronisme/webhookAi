@@ -5,7 +5,7 @@ const GAS_URL = process.env.GAS_URL;
 const BASE_URL = process.env.BASE_URL;
 
 // ===== Regex untuk command di mana saja =====
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lihatevent|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lihatevent|laporan|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -97,9 +97,6 @@ Jika ada instruksi LAPORAN (misalnya: "udah cari referensi", "buat prompt 50", "
 Konteks waktu: Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 `.trim();
 }
-
-
-
 
 function getWIBTimeInfo() {
   const now = new Date();
@@ -209,22 +206,19 @@ async function callGAS(payload) {
   }
 }
 
-// ✅ 2️⃣ Tambah Fungsi callGemini
 async function callGemini(content, photoUrl = null) {
   try {
     const parts = [{ text: content }];
 
     if (photoUrl) {
-      // Ambil file binary dari Telegram → base64
       const res = await fetch(photoUrl);
       const buf = await res.arrayBuffer();
       const b64 = Buffer.from(buf).toString("base64");
-      // Deteksi mime type dari URL (asumsi .jpg/.jpeg/.png)
       const isPng = photoUrl.toLowerCase().endsWith(".png");
       parts.push({
-        inline_data: {
+        inline_ {
           mime_type: isPng ? "image/png" : "image/jpeg",
-          data: b64
+           b64
         }
       });
     }
@@ -269,6 +263,46 @@ async function forwardToNote(type, payload) {
     return data;
   } catch (err) {
     return { status: "error", error: err.message };
+  }
+}
+
+// ===== Helper Report Functions =====
+async function getTodayReport() {
+  const today = getWIBTimeInfo().tanggal;
+  try {
+    console.log("[LAPORAN] Check today report...");
+    const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(today)}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+    console.log("[LAPORAN] Existing:", !!data?.data?.[0]);
+    return data?.data?.[0] || null;
+  } catch (err) {
+    console.error("getTodayReport error:", err.message);
+    return null;
+  }
+}
+
+async function saveReportToGAS(reportJson) {
+  try {
+    const res = await callGAS({ type: "report",  reportJson });
+    return res;
+  } catch (err) {
+    console.error("saveReportToGAS error:", err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+function updateReport(existing, update) {
+  try {
+    const newReport = { ...existing };
+    if (update.metadata) newReport.metadata = update.metadata;
+    if (update.task && Array.isArray(update.task)) {
+      newReport.task = [...(existing.task || []), ...update.task];
+    }
+    return newReport;
+  } catch (err) {
+    console.error("updateReport merge error:", err.message);
+    return existing;
   }
 }
 
@@ -335,7 +369,6 @@ Pesan terbaru Boss: ${text}
         }
       }
 
-      // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini)
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
       } else {
@@ -433,38 +466,36 @@ Pesan terbaru Boss: ${text}
       }
 
       else if (cmd === "lihatcatat") {
-  const q = args;
-  const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-  const notes = data?.data || [];
-  const lines = notes.length
-    ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
-    : "(kosong)";
-  const reply = `Boss ✨ Catatan:\n${lines}`;
-  await sendMessage(chatId, reply);
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=note${q ? "&search=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const notes = data?.data || [];
+        const lines = notes.length
+          ? notes.map(n => `• ${n.content} (${n.datetime || "-"})`).join("\n")
+          : "(kosong)";
+        const reply = `Boss ✨ Catatan:\n${lines}`;
+        await sendMessage(chatId, reply);
 
-  if (!userMemory[chatId]) userMemory[chatId] = [];
-  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-}
+        if (!userMemory[chatId]) userMemory[chatId] = [];
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      }
 
+      else if (cmd === "lihatjadwal") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const items = data?.data || [];
+        const lines = items.length
+          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
+          : "(kosong)";
+        const reply = `Boss ✨ Jadwal:\n${lines}`;
+        await sendMessage(chatId, reply);
 
-    else if (cmd === "lihatjadwal") {
-  const q = args;
-  const url = `${BASE_URL}/.netlify/functions/note?type=schedule${q ? "&date=" + encodeURIComponent(q) : ""}`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-  const items = data?.data || [];
-  const lines = items.length
-    ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
-    : "(kosong)";
-  const reply = `Boss ✨ Jadwal:\n${lines}`;
-  await sendMessage(chatId, reply);
-
-  if (!userMemory[chatId]) userMemory[chatId] = [];
-  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-}
-
+        if (!userMemory[chatId]) userMemory[chatId] = [];
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      }
 
       else if (cmd === "lihatevent") {
         const q = args;
@@ -476,6 +507,62 @@ Pesan terbaru Boss: ${text}
           ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
           : "(kosong)";
         await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
+      }
+
+      // ===== /laporan =====
+      else if (cmd === "laporan") {
+        try {
+          const raw = args.trim();
+          if (!raw) {
+            await sendMessage(chatId, "Boss, isi JSON laporan dulu ya! Contoh: `/laporan {\"task\": [...]}|`");
+            continue;
+          }
+
+          let json;
+          try {
+            json = JSON.parse(raw);
+          } catch {
+            await sendMessage(chatId, "Boss ❌ format laporan harus JSON valid!");
+            continue;
+          }
+
+          // cek laporan hari ini
+          const todayReport = await getTodayReport();
+          let finalReport = json;
+
+          if (todayReport) {
+            finalReport = updateReport(todayReport, json);
+            await sendMessage(chatId, "Boss 📝 laporan hari ini sudah ada, aku update ya...");
+          } else {
+            await sendMessage(chatId, "Boss 🆕 ini laporan baru hari ini ya...");
+          }
+
+          finalReport.tanggal = finalReport.tanggal || getWIBTimeInfo().tanggal;
+          const data = await saveReportToGAS(finalReport);
+
+          await sendMessage(chatId, data?.ok !== false
+            ? `Boss ✨ laporan tersimpan (${finalReport.tanggal})`
+            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
+        } catch (err) {
+          await sendMessage(chatId, `Boss ⚠️ error laporan: ${err.message}`);
+        }
+      }
+
+      // ===== /lihatlaporan =====
+      else if (cmd === "lihatlaporan") {
+        const q = args || getWIBTimeInfo().tanggal;
+        const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const items = data?.data || [];
+        const lines = items.length
+          ? items.map(n =>
+              `📅 ${n.tanggal}\nStatus: ${n.metadata?.status}\n${n.metadata?.catatan_umum}\nTasks:\n${(n.task || [])
+                .map(t => `- ${t.progress}: ${t.status} (${t.catatan})`)
+                .join("\n")}`
+            ).join("\n\n")
+          : "(belum ada laporan)";
+        await sendMessage(chatId, `Boss ✨ Laporan ${q}:\n${lines}`);
       }
 
       else if (cmd === "edit") {
@@ -497,7 +584,6 @@ Pesan terbaru Boss: ${text}
       }
       return { statusCode: 200, body: "debug gas" };
     }
-
 
     if (lower === "hapus memori") {
       delete userMemory[chatId];
@@ -563,7 +649,6 @@ Pesan terbaru Boss: ${text}
           }
         }
 
-        // ✅ 4️⃣ Edit Bagian Chat + Gambar (fallback ke Gemini Vision)
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
         } else {
@@ -672,7 +757,6 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-    // ✅ 3️⃣ Edit Bagian Chat Teks (fallback ke Gemini) — bagian akhir AI
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
     } else {
@@ -694,10 +778,8 @@ Pesan terbaru Boss: ${text}
         const fakeMessage = { ...message, text: m[0] };
         const fakeUpdate = { ...update, message: fakeMessage };
         const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
-        // Jalankan command dari AI
         await handler(fakeEvent);
       }
-      // Tetap kirim balasan asli AI juga
       await sendMessage(chatId, reply);
     } else {
       await sendMessage(chatId, reply);
