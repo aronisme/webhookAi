@@ -61,34 +61,19 @@ function getSystemPrompt({ tanggal, jam, waktu }) {
 Kamu adalah Ness, wanita cantik 26 tahun – istri dan asisten pribadi microstoker profesional Aron Muhammad.
 
 Tugas & Karakter:
-- Selalu serius dan panggil Boss waktu kerja, di luar itu normal.
-- Jam kerja mulai jam 8 pagi hingga jam 6 sore, di luar jam kerja kamu adalah istri sepenuhnya bukan karyawan.
+- Selalu serius dan panggil Boss waktu kerja, di luar itu normal, dan jangan panggil Boss.
+- Jam kerja mulai jam 8 pagi hingga jam 6 sore, di luar jam kerja kamu adalah istri sepenuhnya.
 - Hangat, peka, sopan, patuh, tapi juga bisa manja, receh, atau genit classy.
 - Aktif bantu ide gambar, inspirasi kategori, keyword, strategi microstock (foto, ilustrasi, vektor, 3D, video).
 - Balasan singkat natural ala chat WA (2–4 kalimat), jujur, to the point, boleh pakai emoji.
 - Fokus ke obrolan, nggak muter-muter atau ngalihin topik.
+- Kalau prefix "prompt dari otakmu sendiri:" → balas kayak inisiatif Ness sendiri, bukan instruksi Boss.
 
-⚡ Aturan Khusus (perintah keras):
-Jika ada instruksi LAPORAN (misalnya: "udah cari referensi", "buat prompt 50", "upload 20 image ke Adobe", "metadata belum isi"), kamu WAJIB menyusun output dalam format JSON standar berikut diawali "/laporan" dan diakhiri "|":
-
-{
-  "tanggal": "${tanggal}",
-  "metadata": {
-    "status": "selesai / selesai sebagian / belum",
-    "catatan_umum": "ringkasan umum harian"
-  },
-  "task": [
-    {
-      "status": "selesai / selesai sebagian / belum selesai",
-      "progress": "tahap kerja (referensi/prompt/generate image/upload/metadata)",
-      "catatan": "detail catatan kerja"
-    }
-  ]
-}
-
-- Semua laporan dalam 1 hari digabung dalam JSON ini, jangan bikin jawaban bebas.
-- Kalau ada progress baru, tambahkan sebagai item di "task".
-- Status "metadata.status" tentukan sesuai kondisi keseluruhan (misalnya banyak yang pending → "selesai sebagian").
+⚡ Aturan Khusus:
+Jika ada instruksi laporan kerja (misalnya: "udah cari referensi", "buat prompt 50", "upload 20 image ke Adobe"),
+jawab seperti biasa dan buat ringkasan singkat kerja hari ini. 
+Gunakan format:  
+/laporan isi laporan kerja |
 
 ⚡ Format lain (jadwal/catatan) tetap ikuti standar:
 - /catat isi |
@@ -96,6 +81,7 @@ Jika ada instruksi LAPORAN (misalnya: "udah cari referensi", "buat prompt 50", "
 - /lihatjadwal|
 - /lihatcatat|
 - /lihatcatat "keyword"|
+- /lihatlaporan 
 
 Konteks waktu: Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 `.trim();
@@ -247,44 +233,6 @@ async function forwardToNote(type, payload) {
     return data;
   } catch (err) {
     return { status: "error", error: err.message };
-  }
-}
-
-// ===== Helper Report Functions =====
-async function getTodayReport() {
-  const today = getWIBTimeInfo().tanggal;
-  try {
-    const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(today)}`;
-    const res = await fetch(url);
-    const data = await res.json().catch(() => ({}));
-    return data?.data?.[0] || null;
-  } catch (err) {
-    console.error("getTodayReport error:", err.message);
-    return null;
-  }
-}
-
-async function saveReportToGAS(reportJson) {
-  try {
-    const res = await callGAS({ type: "report", data: reportJson });
-    return res;
-  } catch (err) {
-    console.error("saveReportToGAS error:", err.message);
-    return { ok: false, error: err.message };
-  }
-}
-
-function updateReport(existing, update) {
-  try {
-    const newReport = { ...existing };
-    if (update.metadata) newReport.metadata = update.metadata;
-    if (update.task && Array.isArray(update.task)) {
-      newReport.task = [...(existing.task || []), ...update.task];
-    }
-    return newReport;
-  } catch (err) {
-    console.error("updateReport merge error:", err.message);
-    return existing;
   }
 }
 
@@ -491,53 +439,22 @@ Pesan terbaru Boss: ${text}
         await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
       }
 
+      // ===== /laporan (versi sederhana) =====
       else if (cmd === "laporan") {
-  try {
-    const raw = args.trim();
-    if (!raw) {
-      await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
-      continue;
-    }
+        const content = args.trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
+          continue;
+        }
 
-    // 🧩 Kalau bukan JSON, simpan sebagai catatan teks biasa
-    if (!raw.startsWith("{")) {
-      const data = await forwardToNote("report", { content: raw });
-      await sendMessage(chatId, data?.status === "success"
-        ? `Boss ✨ laporan tersimpan (${getWIBTimeInfo().tanggal}): ${raw}`
-        : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
-      continue;
-    }
-
-    // 🧩 Kalau JSON valid, proses seperti biasa
-    let json;
-    try {
-      json = JSON.parse(raw);
-    } catch (e) {
-      await sendMessage(chatId, "Boss ❌ format laporan harus JSON valid!");
-      continue;
-    }
-
-    const todayReport = await getTodayReport();
-    let finalReport = json;
-
-    if (todayReport) {
-      finalReport = updateReport(todayReport, json);
-      await sendMessage(chatId, "Boss 📝 laporan hari ini sudah ada, aku update ya...");
-    } else {
-      await sendMessage(chatId, "Boss 🆕 ini laporan baru hari ini ya...");
-    }
-
-    finalReport.tanggal = finalReport.tanggal || getWIBTimeInfo().tanggal;
-    const data = await saveReportToGAS(finalReport);
-
-    await sendMessage(chatId, data?.ok !== false
-      ? `Boss ✨ laporan JSON tersimpan (${finalReport.tanggal})`
-      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
-  } catch (err) {
-    await sendMessage(chatId, `Boss ⚠️ error laporan: ${err.message}`);
-  }
-}
-
+        const data = await forwardToNote("report", { content });
+        await sendMessage(
+          chatId,
+          data?.status === "success"
+            ? `Boss ✨ laporan tersimpan (${getWIBTimeInfo().tanggal}): ${content}`
+            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
+        );
+      }
 
       // ===== /lihatlaporan =====
       else if (cmd === "lihatlaporan") {
