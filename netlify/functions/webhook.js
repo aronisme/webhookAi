@@ -785,8 +785,12 @@ if (aiCommands.length > 0) {
   }
 }
 await sendMessage(chatId, reply);
-
 userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
 userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
 return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
+  } catch (err) {
+    console.error("Error Ness webhook:", err);
+    return { statusCode: 500, body: "Internal Server Error" };
+  }
+}; // ✅ jangan lupa kurung tutup & titik koma di akhir file
