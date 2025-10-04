@@ -5,6 +5,8 @@ const GAS_URL = process.env.GAS_URL;
 const BASE_URL = process.env.BASE_URL;
 
 // ===== Regex untuk command di mana saja =====
+// Format: /command isi|
+// Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
 const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lihatevent|laporan|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
@@ -60,7 +62,7 @@ Kamu adalah Ness, wanita cantik 26 tahun – istri dan asisten pribadi microstok
 
 Tugas & Karakter:
 - Selalu serius dan panggil Boss waktu kerja, di luar itu normal.
-- Jam kerja mulai jam 8 pagi hingga jam 6 sore.
+- Jam kerja mulai jam 8 pagi hingga jam 6 sore, di luar jam kerja kamu adalah istri sepenuhnya bukan karyawan.
 - Hangat, peka, sopan, patuh, tapi juga bisa manja, receh, atau genit classy.
 - Aktif bantu ide gambar, inspirasi kategori, keyword, strategi microstock (foto, ilustrasi, vektor, 3D, video).
 - Balasan singkat natural ala chat WA (2–4 kalimat), jujur, to the point, boleh pakai emoji.
@@ -162,25 +164,6 @@ function extractNumber(s, def = 10) {
   return m ? parseInt(m[1], 10) : def;
 }
 
-function extractNoteContent(raw) {
-  return "";
-}
-
-function coerceScheduleText(raw) {
-  if (raw.includes("|")) return raw;
-  const tRe = /\b((besok|lusa|hari ini)\s+\d{1,2}:\d{2}|\d{1,2}:\d{2})\b/i;
-  const m = raw.match(tRe);
-  if (m) {
-    const timePart = m[1].trim();
-    const eventPart = raw
-      .replace(tRe, "")
-      .replace(/\b(jadwal(?:kan)?|ingatkan|remind)\b/i, "")
-      .trim();
-    return `${eventPart} | ${timePart}`;
-  }
-  return raw;
-}
-
 async function callGAS(payload) {
   try {
     const res = await fetch(GAS_URL, {
@@ -271,11 +254,9 @@ async function forwardToNote(type, payload) {
 async function getTodayReport() {
   const today = getWIBTimeInfo().tanggal;
   try {
-    console.log("[LAPORAN] Check today report...");
     const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(today)}`;
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
-    console.log("[LAPORAN] Existing:", !!data?.data?.[0]);
     return data?.data?.[0] || null;
   } catch (err) {
     console.error("getTodayReport error:", err.message);
@@ -309,7 +290,6 @@ function updateReport(existing, update) {
 
 // ===== Main handler =====
 exports.handler = async function (event) {
-
   try {
     // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
@@ -523,12 +503,11 @@ Pesan terbaru Boss: ${text}
           let json;
           try {
             json = JSON.parse(raw);
-          } catch {
+          } catch (e) {
             await sendMessage(chatId, "Boss ❌ format laporan harus JSON valid!");
             continue;
           }
 
-          // cek laporan hari ini
           const todayReport = await getTodayReport();
           let finalReport = json;
 
@@ -552,15 +531,15 @@ Pesan terbaru Boss: ${text}
 
       // ===== /lihatlaporan =====
       else if (cmd === "lihatlaporan") {
-        const q = args || getWIBTimeInfo().tanggal;
+        const q = args.trim() || getWIBTimeInfo().tanggal;
         const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(q)}`;
         const res = await fetch(url);
         const data = await res.json().catch(() => ({}));
         const items = data?.data || [];
         const lines = items.length
           ? items.map(n =>
-              `📅 ${n.tanggal}\nStatus: ${n.metadata?.status}\n${n.metadata?.catatan_umum}\nTasks:\n${(n.task || [])
-                .map(t => `- ${t.progress}: ${t.status} (${t.catatan})`)
+              `📅 ${n.tanggal}\nStatus: ${n.metadata?.status || "-"}\nCatatan: ${n.metadata?.catatan_umum || "-"}\nTasks:\n${(n.task || [])
+                .map(t => `- ${t.progress || "-"}: ${t.status || "-"} (${t.catatan || "-"})`)
                 .join("\n")}`
             ).join("\n\n")
           : "(belum ada laporan)";
@@ -773,25 +752,26 @@ Pesan terbaru Boss: ${text}
       }
     }
 
-   // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
-const aiCommands = [...reply.matchAll(commandRegex)];
-if (aiCommands.length > 0) {
-  console.log(`Detected ${aiCommands.length} embedded command(s) in AI reply`);
-  for (const m of aiCommands) {
-    const fakeMessage = { ...message, text: m[0] };
-    const fakeUpdate = { ...update, message: fakeMessage };
-    const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
-    await new Promise(r => setTimeout(r, 200)); // biar nggak kena limit
-    await exports.handler(fakeEvent);
-  }
-}
-await sendMessage(chatId, reply);
-userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-userMemory[chatId] = summarizeContext(userMemory[chatId]);
+    // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
+    const aiCommands = [...reply.matchAll(commandRegex)];
+    if (aiCommands.length > 0) {
+      console.log(`Detected ${aiCommands.length} embedded command(s) in AI reply`);
+      for (const m of aiCommands) {
+        const fakeMessage = { ...message, text: m[0] };
+        const fakeUpdate = { ...update, message: fakeMessage };
+        const fakeEvent = { ...event, body: JSON.stringify(fakeUpdate) };
+        await new Promise(r => setTimeout(r, 200));
+        await exports.handler(fakeEvent);
+      }
+    }
 
-return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
+    await sendMessage(chatId, reply);
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+    return { statusCode: 200, body: JSON.stringify({ status: "ok" }) };
   } catch (err) {
     console.error("Error Ness webhook:", err);
     return { statusCode: 500, body: "Internal Server Error" };
   }
-}; // ✅ jangan lupa kurung tutup & titik koma di akhir file
+};
