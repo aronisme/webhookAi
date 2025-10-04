@@ -1,5 +1,6 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycby6RDmsMaNlz1RYGi0MMRtIAJYc4pUw6rGtqJIhz8yxpslHwAl2ZmdiIKgL2EMiX-9c/exec?auth=MYSECRET123";
 
+
 // Update 2025-10: mendukung type=report (laporan harian dari webhook Ness)
 
 exports.handler = async (event) => {
