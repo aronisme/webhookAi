@@ -381,15 +381,15 @@ Pesan terbaru Boss: ${text}
       else if (cmd === "lapor") {
         const parts = args.split(/\s+/);
         if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: `/lapor YYYY-MM-DD HH:MM isi acara|`");
+          await sendMessage(chatId, "Boss, format: `/lapor YYYY-MM-DD HH:MM isi laporan|`");
           continue;
         }
         const datetime = parts[0] + " " + parts[1];
         const content = parts.slice(2).join(" ");
         const data = await forwardToNote("report", { datetime, content });
         await sendMessage(chatId, data?.status === "success"
-          ? `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`
-          : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
+          ? `Boss ✨ laporan tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
       }
 
 

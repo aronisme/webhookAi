@@ -29,7 +29,7 @@ exports.handler = async (event) => {
       if (body) {
         try {
           const jsonBody = JSON.parse(body);
-          const validTypes = ["note", "schedule", "event"];
+          const validTypes = ["note", "schedule", "report"];
           if (jsonBody.type && !validTypes.includes(jsonBody.type)) {
             return {
               statusCode: 400,
