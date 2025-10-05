@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|laporan|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -378,6 +378,20 @@ Pesan terbaru Boss: ${text}
       }
 
      
+      else if (cmd === "lapor") {
+        const parts = args.split(/\s+/);
+        if (parts.length < 3) {
+          await sendMessage(chatId, "Boss, format: `/lapor YYYY-MM-DD HH:MM isi acara|`");
+          continue;
+        }
+        const datetime = parts[0] + " " + parts[1];
+        const content = parts.slice(2).join(" ");
+        const data = await forwardToNote("report", { datetime, content });
+        await sendMessage(chatId, data?.status === "success"
+          ? `Boss ✨ jadwal tersimpan: ${datetime} • ${content}`
+          : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
+      }
+
 
       else if (cmd === "lihatcatat") {
         const q = args;
