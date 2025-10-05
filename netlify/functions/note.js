@@ -1,8 +1,9 @@
-const GAS_URL = process.env.GAS_URL; // simpan di ENV, jangan hardcode
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyHYZE3RB9F-0qbMXGqiNmauiUiLyWCsBk9CFPryzoNKsiAj-E_vDpPeimeNTNqVwGj/exec?auth=MYSECRET123";
 
 exports.handler = async (event) => {
   const { httpMethod, rawQuery, body } = event;
 
+  // ✅ Hanya izinkan metode GET dan POST
   if (!["GET", "POST"].includes(httpMethod)) {
     return {
       statusCode: 405,
@@ -12,6 +13,7 @@ exports.handler = async (event) => {
 
   try {
     if (httpMethod === "GET") {
+      // 🔁 Teruskan query string ke Google Apps Script (GAS)
       const url = GAS_URL + (rawQuery ? `&${rawQuery}` : "");
       const response = await fetch(url);
       const text = await response.text();
@@ -23,11 +25,11 @@ exports.handler = async (event) => {
     }
 
     if (httpMethod === "POST") {
-      // ✅ Validasi payload type
+      // 🔍 Validasi payload (opsional, hanya jika berupa JSON valid)
       if (body) {
         try {
           const jsonBody = JSON.parse(body);
-          const validTypes = ["note", "schedule", "report"];
+          const validTypes = ["note", "schedule", "event"];
           if (jsonBody.type && !validTypes.includes(jsonBody.type)) {
             return {
               statusCode: 400,
@@ -35,10 +37,11 @@ exports.handler = async (event) => {
             };
           }
         } catch {
-          // kalau bukan JSON valid, terusin ke GAS
+          // Jika bukan JSON valid, tetap lanjutkan — biarkan GAS menangani
         }
       }
 
+      // 🔁 Teruskan body asli ke GAS
       const response = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -46,16 +49,10 @@ exports.handler = async (event) => {
       });
 
       const text = await response.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        json = { status: response.ok ? "success" : "error", raw: text };
-      }
 
       return {
         statusCode: response.ok ? 200 : 500,
-        body: JSON.stringify(json),
+        body: text,
       };
     }
   } catch (err) {
