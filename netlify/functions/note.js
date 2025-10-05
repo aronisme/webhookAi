@@ -1,5 +1,5 @@
-const GAS_URL = process.env.GAS_URL;   // simpan full URL tanpa auth
-const AUTH_SECRET = process.env.AUTH_SECRET; // WDD
+const GAS_URL = process.env.GAS_URL;   // simpan full URL tanpa authS
+const AUTH_SECRET = process.env.AUTH_SECRET; // WDDAS
 
 exports.handler = async (event) => {
   const { httpMethod, rawQuery, body } = event;
