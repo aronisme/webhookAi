@@ -377,20 +377,23 @@ Pesan terbaru Boss: ${text}
           : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
-     
-      else if (cmd === "lapor") {
-        const parts = args.split(/\s+/);
-        if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: `/lapor YYYY-MM-DD HH:MM isi laporan|`");
-          continue;
-        }
-        const datetime = parts[0] + " " + parts[1];
-        const content = parts.slice(2).join(" ");
-        const data = await forwardToNote("report", { datetime, content });
-        await sendMessage(chatId, data?.status === "success"
-          ? `Boss ✨ laporan tersimpan: ${datetime} • ${content}`
-          : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`);
-      }
+     else if (cmd === "lapor") {
+  const content = args.trim();
+  if (!content) {
+    await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/lapor upload 30 image ke Adobe|`");
+    return;
+  }
+
+  const { tanggal, jam } = getWIBTimeInfo();
+  const datetime = `${tanggal} ${jam}`;
+  const data = await forwardToNote("report", { datetime, content });
+
+  await sendMessage(chatId,
+    data?.status === "success"
+      ? `Boss ✨ laporan tersimpan (${datetime}): ${content}`
+      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
+  );
+}
 
 
       else if (cmd === "lihatcatat") {
@@ -424,6 +427,23 @@ Pesan terbaru Boss: ${text}
         if (!userMemory[chatId]) userMemory[chatId] = [];
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
+
+       else if (cmd === "lihatlaporan") {
+        const q = args;
+        const url = `${BASE_URL}/.netlify/functions/note?type=report${q ? "&date=" + encodeURIComponent(q) : ""}`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        const items = data?.data || [];
+        const lines = items.length
+          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
+          : "(kosong)";
+        const reply = `Boss ✨ laporan:\n${lines}`;
+        await sendMessage(chatId, reply);
+
+        if (!userMemory[chatId]) userMemory[chatId] = [];
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      }
+
 
      
 
