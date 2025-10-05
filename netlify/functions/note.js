@@ -1,12 +1,9 @@
-const GAS_URL = "https://script.google.com/macros/s/AKfycby6RDmsMaNlz1RYGi0MMRtIAJYc4pUw6rGtqJIhz8yxpslHwAl2ZmdiIKgL2EMiX-9c/exec?auth=MYSECRET123";
-
-
-// Update 2025-10: mendukung type=report (laporan harian dari webhook Ness)
+const GAS_URL = process.env.GAS_URL;   // simpan full URL tanpa auth
+const AUTH_SECRET = process.env.AUTH_SECRET; // taruh "MYSECRET123" di sini
 
 exports.handler = async (event) => {
   const { httpMethod, rawQuery, body } = event;
 
-  // ✅ Hanya izinkan metode GET dan POST
   if (!["GET", "POST"].includes(httpMethod)) {
     return {
       statusCode: 405,
@@ -18,29 +15,26 @@ exports.handler = async (event) => {
     if (httpMethod === "GET") {
       console.log("[NOTE] GET → Forward to GAS:", rawQuery || "(no query)");
 
-      // Pastikan tanda tanya di URL benar
       let url = GAS_URL;
       if (rawQuery) {
         url += rawQuery.startsWith("?") ? rawQuery : `?${rawQuery}`;
       }
+      // tambahin auth secret di query
+      url += (url.includes("?") ? "&" : "?") + `auth=${AUTH_SECRET}`;
 
       const response = await fetch(url);
       const text = await response.text();
 
-      return {
-        statusCode: response.ok ? 200 : 500,
-        body: text,
-      };
+      return { statusCode: response.ok ? 200 : 500, body: text };
     }
 
     if (httpMethod === "POST") {
       console.log("[NOTE] POST → Forward to GAS:", body ? "JSON body" : "empty");
 
-      // 🔍 Validasi payload (opsional, hanya jika berupa JSON valid)
       if (body) {
         try {
           const jsonBody = JSON.parse(body);
-          const validTypes = ["note", "schedule", "event", "report"]; // ✅ report ditambahkan
+          const validTypes = ["note", "schedule", "report"];
           if (jsonBody.type && !validTypes.includes(jsonBody.type)) {
             return {
               statusCode: 400,
@@ -48,23 +42,19 @@ exports.handler = async (event) => {
             };
           }
         } catch {
-          // Jika bukan JSON valid, tetap lanjutkan — biarkan GAS menangani
+          // biarkan GAS handle kalau bukan JSON valid
         }
       }
 
-      // 🔁 Teruskan body asli ke GAS (jangan diubah)
-      const response = await fetch(GAS_URL, {
+      const url = `${GAS_URL}?auth=${AUTH_SECRET}`;
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body || "",
       });
 
       const text = await response.text();
-
-      return {
-        statusCode: response.ok ? 200 : 500,
-        body: text,
-      };
+      return { statusCode: response.ok ? 200 : 500, body: text };
     }
   } catch (err) {
     return {

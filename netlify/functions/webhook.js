@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lihatevent|laporan|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|laporan|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -69,23 +69,19 @@ Tugas & Karakter:
 - Fokus ke inti obrolan, jangan muter-muter.  
 - Kalau prefix "prompt dari otakmu sendiri:" → balas seolah inisiatif Ness sendiri, bukan perintah Boss.  
 
-⚡ Aturan Khusus:
-Jika ada instruksi laporan kerja (misalnya: "udah cari referensi", "buat prompt 50", "upload 20 image ke Adobe"),
-jawab seperti biasa dan buat ringkasan singkat kerja hari ini. 
-Gunakan format:  
-/laporan isi laporan kerja |
-
-⚡ Format lain (jadwal/catatan) tetap ikuti standar:
+⚡ Format command yang tersedia:
 - /catat isi |
 - /jadwal YYYY-MM-DD HH:MM isi |
 - /lihatjadwal|
 - /lihatcatat|
 - /lihatcatat "keyword"|
-- /lihatlaporan 
+- /laporan isi laporan kerja |
+- /lihatlaporan
 
 Konteks waktu: Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 `.trim();
 }
+
 
 function getWIBTimeInfo() {
   const now = new Date();
@@ -381,19 +377,7 @@ Pesan terbaru Boss: ${text}
           : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
-      else if (cmd === "event") {
-        const parts = args.split(/\s+/);
-        if (parts.length < 3) {
-          await sendMessage(chatId, "Boss, format: `/event YYYY-MM-DD HH:MM nama event|`");
-          continue;
-        }
-        const datetime = parts[0] + " " + parts[1];
-        const content = parts.slice(2).join(" ");
-        const data = await forwardToNote("event", { datetime, content });
-        await sendMessage(chatId, data?.status === "success"
-          ? `Boss ✨ event tersimpan: ${datetime} • ${content}`
-          : `Boss ❌ gagal simpan event: ${data?.error || "unknown error"}`);
-      }
+     
 
       else if (cmd === "lihatcatat") {
         const q = args;
@@ -427,55 +411,47 @@ Pesan terbaru Boss: ${text}
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
 
-      else if (cmd === "lihatevent") {
-        const q = args;
-        const url = `${BASE_URL}/.netlify/functions/note?type=event${q ? "&date=" + encodeURIComponent(q) : ""}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const items = data?.data || [];
-        const lines = items.length
-          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
-          : "(kosong)";
-        await sendMessage(chatId, `Boss ✨ Event:\n${lines}`);
-      }
+     
 
-      // ===== /laporan (versi sederhana) =====
       else if (cmd === "laporan") {
-        const content = args.trim();
-        if (!content) {
-          await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
-          continue;
-        }
+  const content = args.trim();
+  if (!content) {
+    await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
+    continue;
+  }
 
-        const data = await forwardToNote("report", { content });
-        await sendMessage(
-          chatId,
-          data?.status === "success"
-            ? `Boss ✨ laporan tersimpan (${getWIBTimeInfo().tanggal}): ${content}`
-            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
-        );
-      }
+  const { tanggal } = getWIBTimeInfo();
+  const data = await forwardToNote("report", { datetime: new Date().toISOString(), content });
 
-      // ===== /lihatlaporan =====
-      else if (cmd === "lihatlaporan") {
-        const q = args.trim() || getWIBTimeInfo().tanggal;
-        const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(q)}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const items = data?.data || [];
-        const lines = items.length
-          ? items.map(n =>
-              `📅 ${n.tanggal}\nStatus: ${n.metadata?.status || "-"}\nCatatan: ${n.metadata?.catatan_umum || "-"}\nTasks:\n${(n.task || [])
-                .map(t => `- ${t.progress || "-"}: ${t.status || "-"} (${t.catatan || "-"})`)
-                .join("\n")}`
-            ).join("\n\n")
-          : "(belum ada laporan)";
-        await sendMessage(chatId, `Boss ✨ Laporan ${q}:\n${lines}`);
-      }
+  await sendMessage(
+    chatId,
+    data?.status === "success"
+      ? `Boss ✨ laporan tersimpan (${tanggal}): ${content}`
+      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
+  );
+}
 
-      else if (cmd === "edit") {
-        await sendMessage(chatId, "Boss, fitur /edit| belum tersedia. Tunggu update berikutnya ya 💖");
-      }
+else if (cmd === "lihatlaporan") {
+  const q = args.trim() || getWIBTimeInfo().tanggal;
+  const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(q)}`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  const items = data?.data || [];
+
+  const lines = items.length
+    ? items.map(n => `• ${n.datetime || n.tanggal} — ${n.content}`).join("\n")
+    : "(belum ada laporan)";
+
+  const reply = `Boss ✨ Laporan ${q}:\n${lines}`;
+  await sendMessage(chatId, reply);
+
+  if (!userMemory[chatId]) userMemory[chatId] = [];
+  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+}
+
+
+     
+
     }
 
     if (matched) {
