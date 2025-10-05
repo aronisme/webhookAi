@@ -1,5 +1,5 @@
 const GAS_URL = process.env.GAS_URL;   // simpan full URL tanpa auth
-const AUTH_SECRET = process.env.AUTH_SECRET; // taruh "MYSECRET123" di sini
+const AUTH_SECRET = process.env.AUTH_SECRET; // WDD
 
 exports.handler = async (event) => {
   const { httpMethod, rawQuery, body } = event;
