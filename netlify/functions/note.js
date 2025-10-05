@@ -1,7 +1,4 @@
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxp1UkOKsWr0QGcmktmK2WPMrpSkVubA4Xr-QJtevMLt-6ejZPfBKMDUiOycwuzuc7n/exec?auth=MYSECRET123";
-
-
-// Update 2025-10: mendukung type=report (laporan harian dari webhook Ness)
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwivcSOYPx5GjJikapUHLI8RJ0fO9owcMiLpKDQtHA/dev?auth=MYSECRET123";
 
 exports.handler = async (event) => {
   const { httpMethod, rawQuery, body } = event;
@@ -16,14 +13,8 @@ exports.handler = async (event) => {
 
   try {
     if (httpMethod === "GET") {
-      console.log("[NOTE] GET → Forward to GAS:", rawQuery || "(no query)");
-
-      // Pastikan tanda tanya di URL benar
-      let url = GAS_URL;
-      if (rawQuery) {
-        url += rawQuery.startsWith("?") ? rawQuery : `?${rawQuery}`;
-      }
-
+      // 🔁 Teruskan query string ke Google Apps Script (GAS)
+      const url = GAS_URL + (rawQuery ? `&${rawQuery}` : "");
       const response = await fetch(url);
       const text = await response.text();
 
@@ -34,13 +25,11 @@ exports.handler = async (event) => {
     }
 
     if (httpMethod === "POST") {
-      console.log("[NOTE] POST → Forward to GAS:", body ? "JSON body" : "empty");
-
       // 🔍 Validasi payload (opsional, hanya jika berupa JSON valid)
       if (body) {
         try {
           const jsonBody = JSON.parse(body);
-          const validTypes = ["note", "schedule", "event", "report"]; // ✅ report ditambahkan
+          const validTypes = ["note", "schedule", "event"];
           if (jsonBody.type && !validTypes.includes(jsonBody.type)) {
             return {
               statusCode: 400,
@@ -52,7 +41,7 @@ exports.handler = async (event) => {
         }
       }
 
-      // 🔁 Teruskan body asli ke GAS (jangan diubah)
+      // 🔁 Teruskan body asli ke GAS
       const response = await fetch(GAS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
