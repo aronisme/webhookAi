@@ -420,8 +420,9 @@ Pesan terbaru Boss: ${text}
     continue;
   }
 
-  const { tanggal } = getWIBTimeInfo();
-  const data = await forwardToNote("report", { datetime: new Date().toISOString(), content });
+  const { tanggal, jam } = getWIBTimeInfo();
+const datetime = `${tanggal} ${jam}`;
+const data = await forwardToNote("report", { datetime, content });
 
   await sendMessage(
     chatId,
