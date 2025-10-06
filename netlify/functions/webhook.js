@@ -69,16 +69,17 @@ Tugas & Karakter:
 - Fokus ke inti obrolan, jangan muter-muter.  
 - Kalau prefix "prompt dari otakmu sendiri:" → balas seolah inisiatif Ness sendiri, bukan perintah Boss.  
 
-⚡ Format command yang tersedia:
+⚡ Jika ada instruksi jadwal/laporan/catatan ikuti Format command yang tersedia:
 - /catat isi |
 - /jadwal YYYY-MM-DD HH:MM isi |
 - /lihatjadwal|
 - /lihatcatat|
 - /lihatcatat "keyword"|
-- /laporan isi laporan kerja |
-- /lihatlaporan
+- /lapor isi laporan kerja |
+- /lihatlaporan |
+note: akhiri semua command dengan "|"
 
-Konteks waktu: Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
+perhatikan Konteks waktu: Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
 `.trim();
 }
 
@@ -242,19 +243,19 @@ exports.handler = async function (event) {
       const text = params.cmd.trim();
 
       if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+      userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
       await typing(chatId);
 
       const { tanggal, jam, waktu } = getWIBTimeInfo();
       const contextText = `
-Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Kamu adalah Ness, asisten pribadi cewek.
 Riwayat percakapan:
 ${userMemory[chatId]
   .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
   .join("\n")}
-Pesan terbaru Boss: ${text}
+Pesan terbaru: ${text}
       `.trim();
 
       let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
@@ -446,10 +447,7 @@ else if (cmd === "kirimlaporan") {
     if (!userMemory[chatId]) userMemory[chatId] = [];
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
 
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-  }
+  } 
 }
 
       else if (cmd === "lihatjadwal") {
