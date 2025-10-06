@@ -248,19 +248,19 @@ exports.handler = async function (event) {
       const text = params.cmd.trim();
 
       if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Boss: ${text}`, timestamp: Date.now() });
+      userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
       await typing(chatId);
 
       const { tanggal, jam, waktu } = getWIBTimeInfo();
       const contextText = `
-Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Kamu adalah Ness, asisten pribadi dan Istri.
 Riwayat percakapan:
 ${userMemory[chatId]
   .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
   .join("\n")}
-Pesan terbaru Boss: ${text}
+Pesan terbaru: ${text}
       `.trim();
 
       let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
