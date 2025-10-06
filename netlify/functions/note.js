@@ -8,6 +8,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 405,
       body: JSON.stringify({ status: "error", error: "Method Not Allowed" }),
+      headers: { "Content-Type": "application/json" }
     };
   }
 
@@ -18,9 +19,17 @@ exports.handler = async (event) => {
       const response = await fetch(url);
       const text = await response.text();
 
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { status: response.ok ? "success" : "error", raw: text };
+      }
+
       return {
         statusCode: response.ok ? 200 : 500,
-        body: text,
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" }
       };
     }
 
@@ -34,10 +43,11 @@ exports.handler = async (event) => {
             return {
               statusCode: 400,
               body: JSON.stringify({ status: "error", error: "Invalid type" }),
+              headers: { "Content-Type": "application/json" }
             };
           }
         } catch {
-          // Jika bukan JSON valid, tetap lanjutkan — biarkan GAS menangani
+          // Jika bukan JSON valid, tetap lanjutkan — biarkan GAS yang handle
         }
       }
 
@@ -50,15 +60,24 @@ exports.handler = async (event) => {
 
       const text = await response.text();
 
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { status: response.ok ? "success" : "error", raw: text };
+      }
+
       return {
         statusCode: response.ok ? 200 : 500,
-        body: text,
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" }
       };
     }
   } catch (err) {
     return {
       statusCode: 500,
       body: JSON.stringify({ status: "error", error: err.message }),
+      headers: { "Content-Type": "application/json" }
     };
   }
 };
