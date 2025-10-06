@@ -473,6 +473,31 @@ else if (cmd === "lihatlaporan") {
   }
 }
 
+else if (cmd === "test") {
+  try {
+    // URL GAS
+    const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
+    
+    // Panggil endpoint
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+
+    // Pesan ke Telegram
+    const reply = data?.status === "ok"
+      ? "Boss ✨ test OK — laporan hari ini sudah dikirim."
+      : `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+    
+    await sendMessage(chatId, reply);
+
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+
+  } catch (err) {
+    const reply = `Boss ❌ error test: ${err.message}`;
+    await sendMessage(chatId, reply);
+  }
+}
+
 
       else if (cmd === "lihatjadwal") {
         const q = args;
