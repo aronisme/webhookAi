@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Netlify Ping Tester</title>
+  <style>
+    :root { color-scheme: dark light; }
+    body { font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { margin: 0 0 12px; }
+    fieldset { border: 1px solid #5553; border-radius: 12px; padding: 12px; margin: 12px 0 16px; }
+    label { display:block; margin: 6px 0; }
+    input, select { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid #8884; }
+    .row { display:grid; grid-template-columns: 1fr 140px 140px; gap: 12px; align-items: end; }
+    button { padding: 10px 14px; border-radius: 10px; border: 0; cursor: pointer; }
+    .primary { background: #3b82f6; color: #fff; }
+    .danger { background: #ef4444; color:#fff; }
+    .ghost { background: #eee; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #4442; white-space: nowrap; }
+    tr.good { background: #16a34a22; }
+    tr.slow { background: #eab30822; }
+    tr.bad  { background: #ef444422; }
+    small.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { opacity: .7; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .ok { background:#16a34a; color:#fff; }
+    .fail { background:#ef4444; color:#fff; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>⚡ Netlify Ping Tester</h1>
+    <p class="muted">Uji latency & status endpoint (fungsi Netlify, GAS proxy, API pihak ketiga, dll). Simpel, no deps.</p>
+
+    <fieldset>
+      <div class="row">
+        <label>
+          URL target
+          <input id="url" placeholder="https://example.netlify.app/.netlify/functions/note?type=note" />
+        </label>
+        <label>
+          Interval (ms)
+          <input id="interval" type="number" min="250" step="250" value="2000" />
+        </label>
+        <div style="display:flex; gap:8px">
+          <button id="start" class="primary">Start</button>
+          <button id="stop"  class="danger" disabled>Stop</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <label>
+          Method
+          <select id="method">
+            <option>GET</option>
+            <option>HEAD</option>
+          </select>
+        </label>
+        <label>
+          Mode (CORS)
+          <select id="mode">
+            <option value="cors">cors</option>
+            <option value="no-cors">no-cors</option>
+            <option value="same-origin">same-origin</option>
+          </select>
+        </label>
+      </div>
+      <label>
+        Tambahan header (opsional, JSON)
+        <input id="headers" placeholder='{"Authorization":"Bearer XXX"}' />
+      </label>
+    </fieldset>
+
+    <div>
+      <button id="once" class="ghost">Ping sekali</button>
+      <span id="status" class="muted" style="margin-left:10px">idle</span>
+    </div>
+
+    <table id="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Waktu</th>
+          <th>Latency</th>
+          <th>Status</th>
+          <th>Size</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <p class="muted">
+      Tips: jika kena CORS, test dulu endpoint <span class="mono">/.netlify/functions/ping</span> di bawah.
+      Untuk GAS/third-party, aktifkan CORS di sisi server/proxy melalui Netlify Function.
+    </p>
+
+    <fieldset>
+      <legend>Quick targets</legend>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="ghost ex" data-url="/.netlify/functions/ping">/.netlify/functions/ping</button>
+        <button class="ghost ex" data-url="/.netlify/functions/note?type=note">/.netlify/functions/note?type=note</button>
+        <button class="ghost ex" data-url="/.netlify/functions/note?type=report">/.netlify/functions/note?type=report</button>
+      </div>
+    </fieldset>
+
+    <p class="muted">
+      <small class="mono">Latency = TTFB approx (fetch start → headers received). Size = content-length (kalau ada) atau byte string.</small>
+    </p>
+  </div>
+
+  <script>
+    const $ = (s)=>document.querySelector(s);
+    const tbody = $("#table tbody");
+    const urlInput = $("#url");
+    const intInput = $("#interval");
+    const startBtn = $("#start");
+    const stopBtn  = $("#stop");
+    const onceBtn  = $("#once");
+    const statusEl = $("#status");
+    const methodEl = $("#method");
+    const modeEl   = $("#mode");
+    const headersEl= $("#headers");
+    const examples = document.querySelectorAll(".ex");
+
+    // default isi URL
+    urlInput.value = location.origin + "/.netlify/functions/ping";
+
+    let timer = null, count = 0;
+
+    examples.forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const u = btn.getAttribute("data-url");
+        urlInput.value = (u.startsWith("http") ? u : (location.origin + u));
+      });
+    });
+
+    function parseHeaders(v) {
+      if (!v.trim()) return {};
+      try { return JSON.parse(v); }
+      catch { alert("Header JSON invalid"); return {}; }
+    }
+
+    async function pingOnce() {
+      const url = urlInput.value.trim();
+      if (!url) return alert("Isi URL dulu ya");
+      const method = methodEl.value;
+      const mode = modeEl.value;
+      const headers = parseHeaders(headersEl.value);
+
+      const t0 = performance.now();
+      let ok = false, http = 0, size = 0, cls = "bad";
+      try {
+        const res = await fetch(url, { method, mode, headers });
+        const t1 = performance.now();
+        const latency = Math.round(t1 - t0);
+
+        http = res.status;
+        ok = res.ok;
+
+        // coba baca size
+        const cl = res.headers.get("content-length");
+        if (cl) {
+          size = parseInt(cl, 10);
+        } else if (method !== "HEAD") {
+          const text = await res.text();
+          size = new Blob([text]).size;
+        }
+
+        if (ok && latency <= 400) cls = "good";
+        else if (ok) cls = "slow";
+        else cls = "bad";
+
+        addRow({ latency, http, size, url, cls });
+      } catch (e) {
+        const t1 = performance.now();
+        const latency = Math.round(t1 - t0);
+        addRow({ latency, http: 0, size: 0, url: url + "  (ERR: " + e.message + ")", cls: "bad" });
+      }
+    }
+
+    function addRow({ latency, http, size, url, cls }) {
+      count++;
+      const tr = document.createElement("tr");
+      tr.className = cls;
+      const now = new Date().toLocaleTimeString();
+      tr.innerHTML = `
+        <td>${count}</td>
+        <td>${now}</td>
+        <td><span class="pill ${cls==='bad'?'fail':'ok'}">${latency} ms</span></td>
+        <td>${http || "-"}</td>
+        <td>${size ? size.toLocaleString() + " B" : "-"}</td>
+        <td class="muted"><small class="mono">${url}</small></td>
+      `;
+      tbody.prepend(tr);
+    }
+
+    function start() {
+      const interval = Math.max(250, parseInt(intInput.value || "2000", 10));
+      if (timer) clearInterval(timer);
+      statusEl.textContent = "running (" + interval + " ms)";
+      timer = setInterval(pingOnce, interval);
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      pingOnce(); // langsung sekali di awal
+    }
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      statusEl.textContent = "stopped";
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+
+    onceBtn.addEventListener("click", pingOnce);
+    startBtn.addEventListener("click", start);
+    stopBtn.addEventListener("click", stop);
+    window.addEventListener("beforeunload", ()=> timer && clearInterval(timer));
+  </script>
+</body>
+</html>
