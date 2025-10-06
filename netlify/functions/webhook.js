@@ -79,18 +79,6 @@ cukup balas: "⚠️ Format salah, ulangi sesuai aturan."
 - /lapor isi laporan kerja |
 - /lihatlaporan |
 
-❌ DILARANG:
-- Menulis laporan/jadwal/catatan tanpa tanda "|".
-- Menambah kata lain di luar format.
-- Mengubah urutan parameter.
-
-✔️ Contoh benar:
-/lapor Selesai upload 20 gambar ke Adobe Stock |
-/jadwal 2025-10-07 08:00 Meeting dengan tim produksi |
-
-❌ Contoh salah:
-/lapor Selesai upload 20 gambar
-/laporan upload 20 gambar |
 
 Sumber Prompt:
 - Dari Boss → ikuti instruksi sesuai format di atas.
