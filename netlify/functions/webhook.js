@@ -440,7 +440,7 @@ else if (cmd === "kirimlaporan") {
       }
 
        else if (cmd === "lihatlaporan") {
-         const url = `${GAS_URL}&cmd=sendTodayReportToBot`;
+        const url = `${BASE_URL}/.netlify/functions/note?cmd=sendTodayReportToBot`;
   const res = await fetch(url);
   const data = await res.json().catch(() => ({}));
 
