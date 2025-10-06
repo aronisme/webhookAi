@@ -431,7 +431,7 @@ else if (cmd === "kirimlaporan") {
         if (!userMemory[chatId]) userMemory[chatId] = [];
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
-      else if (cmd === "test") {
+      else if (cmd === "lihatlaporan") {
   try {
     // URL GAS
     const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
@@ -440,12 +440,8 @@ else if (cmd === "kirimlaporan") {
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
 
-    // Pesan ke Telegram
-    const reply = data?.status === "ok"
-      ? "Boss ✨ test OK — laporan hari ini sudah dikirim."
-      : `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-    
-    await sendMessage(chatId, reply);
+   
+
 
     if (!userMemory[chatId]) userMemory[chatId] = [];
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -472,22 +468,7 @@ else if (cmd === "kirimlaporan") {
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
 
-       else if (cmd === "lihatlaporan") {
-        const q = args;
-        const url = `${BASE_URL}/.netlify/functions/note?type=report${q ? "&date=" + encodeURIComponent(q) : ""}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const items = data?.data || [];
-        const lines = items.length
-          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
-          : "(kosong)";
-        const reply = `Boss ✨ laporan:\n${lines}`;
-        await sendMessage(chatId, reply);
-
-        if (!userMemory[chatId]) userMemory[chatId] = [];
-        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-      }
-
+      
 
      
 
@@ -508,24 +489,6 @@ const data = await forwardToNote("report", { datetime, content });
       ? `Boss ✨ laporan tersimpan (${tanggal}): ${content}`
       : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
   );
-}
-
-else if (cmd === "lihatlaporan") {
-  const q = args.trim() || getWIBTimeInfo().tanggal;
-  const url = `${BASE_URL}/.netlify/functions/note?type=report&date=${encodeURIComponent(q)}`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-  const items = data?.data || [];
-
-  const lines = items.length
-    ? items.map(n => `• ${n.datetime || n.tanggal} — ${n.content}`).join("\n")
-    : "(belum ada laporan)";
-
-  const reply = `Boss ✨ Laporan ${q}:\n${lines}`;
-  await sendMessage(chatId, reply);
-
-  if (!userMemory[chatId]) userMemory[chatId] = [];
-  userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
 }
 
 
