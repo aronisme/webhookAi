@@ -385,15 +385,7 @@ Pesan terbaru Boss: ${text}
   }
 //kirim laporan
 else if (cmd === "kirimlaporan") {
-  const url = `${GAS_URL}&cmd=sendTodayReportToBot`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
-
-  await sendMessage(chatId,
-    data?.status === "ok"
-      ? "Boss ✨ laporan hari ini sudah dikirim ke Ness."
-      : "Boss ❌ gagal kirim laporan."
-  );
+ 
 }
 
 
@@ -448,19 +440,15 @@ else if (cmd === "kirimlaporan") {
       }
 
        else if (cmd === "lihatlaporan") {
-        const q = args;
-        const url = `${BASE_URL}/.netlify/functions/note?type=report${q ? "&date=" + encodeURIComponent(q) : ""}`;
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        const items = data?.data || [];
-        const lines = items.length
-          ? items.map(n => `• ${n.datetime} — ${n.content}`).join("\n")
-          : "(kosong)";
-        const reply = `Boss ✨ laporan:\n${lines}`;
-        await sendMessage(chatId, reply);
+         const url = `${GAS_URL}&cmd=sendTodayReportToBot`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
 
-        if (!userMemory[chatId]) userMemory[chatId] = [];
-        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+  await sendMessage(chatId,
+    data?.status === "ok"
+      ? "Boss ✨ laporan hari ini sudah dikirim ke Ness."
+      : "Boss ❌ gagal kirim laporan."
+  );
       }
 
 
