@@ -431,7 +431,7 @@ else if (cmd === "kirimlaporan") {
         if (!userMemory[chatId]) userMemory[chatId] = [];
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
-      else if (cmd === "lihatlaporan") {
+else if (cmd === "lihatlaporan") {
   try {
     // URL GAS
     const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
@@ -440,14 +440,19 @@ else if (cmd === "kirimlaporan") {
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
 
-   
-
+    const reply = `Laporan hari ini: ${JSON.stringify(data)}`;
 
     if (!userMemory[chatId]) userMemory[chatId] = [];
     userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
 
-  } 
+    await sendMessage(chatId, reply);
+
+  } catch (e) {
+    console.error("Error lihatlaporan:", e);
+    await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
+  }
 }
+
 
       else if (cmd === "lihatjadwal") {
         const q = args;
