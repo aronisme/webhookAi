@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|kirimlaporan|lapor|lihatlaporan|model|gemini|maverick|scout|kimi|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -383,6 +383,23 @@ Pesan terbaru Boss: ${text}
     await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/lapor upload 30 image ke Adobe|`");
     return;
   }
+//kirim laporan
+else if (cmd === "kirimlaporan") {
+  const url = `${GAS_URL}&cmd=sendTodayReportToBot`;
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+
+  await sendMessage(chatId,
+    data?.status === "ok"
+      ? "Boss ✨ laporan hari ini sudah dikirim ke Ness."
+      : "Boss ❌ gagal kirim laporan."
+  );
+}
+
+
+
+
+//lain imi
 
   const now = new Date();
   const pad = n => n.toString().padStart(2, "0");
