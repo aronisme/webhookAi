@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(semuacatatan|catat|jadwal|jadwaltoday|lapor|semuajadwal|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(semuacatatan|catat|jadwal|agenda|lapor|semuajadwal|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -521,7 +521,7 @@ else if (cmd === "semuajadwal") {
 
 
 
-else if (cmd === "jadwaltoday") {
+else if (cmd === "agenda") {
   try {
     const url = "https://script.google.com/macros/s/AKfycby-3l39TIIhM--HSHpqigGknI2rTYOFEckMBSTALRp7v_4nq6xwkRc4DbmMu4iIguh8/exec?cmd=sendTodaySchedulesToBot";
     const res = await fetch(url);
