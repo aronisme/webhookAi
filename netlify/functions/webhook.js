@@ -11,6 +11,7 @@ const commandRegex = /\/(semuacatatan|lihatcatatan|catat|jadwal|agenda|lapor|min
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
+  process.env.OPENROUTER_KEY12,
   process.env.OPENROUTER_KEY1,
   process.env.OPENROUTER_KEY11,
   process.env.OPENROUTER_KEY8,
@@ -99,8 +100,6 @@ Jika tidak sesuai format → balas dengan error: "⚠️ Format salah, gunakan p
 
 `.trim();
 }
-
-
 
 
 
