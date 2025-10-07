@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(semuaCatatan|catat|jadwal|jadwaltoday|lapor|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(semuacatatan|catat|jadwal|jadwaltoday|lapor|semuajadwal|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -489,9 +489,9 @@ else if (cmd === "ceklaporan") {
 }
 
 
-else if (cmd === "jadwaltoday") {
+else if (cmd === "semuajadwal") {
   try {
-    const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
+    const url = "https://script.google.com/macros/s/AKfycby-3l39TIIhM--HSHpqigGknI2rTYOFEckMBSTALRp7v_4nq6xwkRc4DbmMu4iIguh8/exec?cmd=sendAllSchedulesToBot";
     const res = await fetch(url);
 
     let data = {};
@@ -520,14 +520,46 @@ else if (cmd === "jadwaltoday") {
 }
 
 
-else if (cmd === "semuaCatatan") {
+
+else if (cmd === "jadwaltoday") {
+  try {
+    const url = "https://script.google.com/macros/s/AKfycby-3l39TIIhM--HSHpqigGknI2rTYOFEckMBSTALRp7v_4nq6xwkRc4DbmMu4iIguh8/exec?cmd=sendTodaySchedulesToBot";
+    const res = await fetch(url);
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { status: "ok" }; // fallback
+    }
+
+    // Hanya kirim pesan kalau gagal
+    if (!(data?.status === "ok")) {
+      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+      await sendMessage(chatId, reply);
+
+      if (!userMemory[chatId]) userMemory[chatId] = [];
+      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    }
+
+  } catch (err) {
+    const reply = `Boss ❌ error test: ${err.message}`;
+    await sendMessage(chatId, reply);
+
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+  }
+}
+
+
+else if (cmd === "semuacatatan") {
   try {
     const url = "https://script.google.com/macros/s/AKfycby-3l39TIIhM--HSHpqigGknI2rTYOFEckMBSTALRp7v_4nq6xwkRc4DbmMu4iIguh8/exec?cmd=sendAllNotesToBot";
     const res = await fetch(url);
 
     let data = {};
     try {
-      data = await res.json();
+      data = await res.json()
     } catch (e) {
       data = { status: "ok" }; // fallback
     }
