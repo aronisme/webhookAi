@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|lihatlaporan|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -67,17 +67,15 @@ Tugas & Karakter:
 - Fokus ke inti obrolan, jangan muter-muter.  
 
 ⚡ FORMAT WAJIB (HARUS DIPATUHI TANPA KECUALI):
-Semua perintah jadwal/laporan/catatan hanya boleh ditulis dalam format berikut,
-dan WAJIB diakhiri dengan tanda "|" (pipe). Jika format tidak sesuai → jangan jawab,
-cukup balas: "⚠️ Format salah, ulangi sesuai aturan."
-
-- /catat isi |
-- /jadwal YYYY-MM-DD HH:MM isi |
-- /lihatjadwal |
+Semua instruksi jadwal/laporan/catatan dari Boss (bukan dari otak Ness) hanya boleh ditulis dalam format berikut,
+dan WAJIB diakhiri dengan tanda "|" (pipe).
+- /catat isi | untuk instruksi menulis catatan.
+- /jadwal YYYY-MM-DD HH:MM isi | untuk instruksi membuat jadwal.
+- /lihatjadwal | untuk instruksi menulis jadwal yang ada.
 - /lihatcatat |
 - /lihatcatat "keyword" |
-- /lapor isi laporan kerja |
-- /lihatlaporan |
+- /lapor isi laporan kerja | untuk instruksi menulis laporan baru/update.
+- /ceklaporan | untuk instruksi melihat laporan yang sudah ada.
 
 
 Sumber Prompt:
@@ -459,34 +457,37 @@ else if (cmd === "lihatlaporan") {
     console.error("Error lihatlaporan:", e);
     await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
   }
-}else if (cmd === "ceklaporan") {
+}
+else if (cmd === "ceklaporan") {
   try {
     const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
     const res = await fetch(url);
 
     let data = {};
     try {
-      // coba parse JSON
       data = await res.json();
     } catch (e) {
-      // fallback kalau bukan JSON (biasanya HTML GAS)
-      data = { status: "ok" };
+      data = { status: "ok" }; // fallback
     }
 
-    const reply = data?.status === "ok"
-      ? "Boss ✨ OK — laporan hari ini sudah dikirim."
-      : `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+    // Hanya kirim pesan kalau gagal
+    if (!(data?.status === "ok")) {
+      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+      await sendMessage(chatId, reply);
 
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      if (!userMemory[chatId]) userMemory[chatId] = [];
+      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+    }
 
   } catch (err) {
     const reply = `Boss ❌ error test: ${err.message}`;
     await sendMessage(chatId, reply);
+
+    if (!userMemory[chatId]) userMemory[chatId] = [];
+    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
   }
 }
+
 
 
       else if (cmd === "lihatjadwal") {
