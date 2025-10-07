@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|lihatlaporan|model|gemini|maverick|scout|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(lihatcatat|catat|jadwal|lihatjadwal|lapor|lihatlaporan|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -460,21 +460,22 @@ else if (cmd === "lihatlaporan") {
     await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
   }
 }
-
-else if (cmd === "test") {
+else if (cmd === "ceklaporan") {
   try {
-    // URL GAS
     const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
-    
-    // Panggil endpoint
     const res = await fetch(url);
-    const data = await res.json().catch(() => ({}));
 
-    // Pesan ke Telegram
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = {};
+    }
+
     const reply = data?.status === "ok"
       ? "Boss ✨ test OK — laporan hari ini sudah dikirim."
       : `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-    
+
     await sendMessage(chatId, reply);
 
     if (!userMemory[chatId]) userMemory[chatId] = [];
