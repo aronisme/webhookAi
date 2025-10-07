@@ -459,21 +459,22 @@ else if (cmd === "lihatlaporan") {
     console.error("Error lihatlaporan:", e);
     await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
   }
-}
-else if (cmd === "ceklaporan") {
+}else if (cmd === "ceklaporan") {
   try {
     const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
     const res = await fetch(url);
 
     let data = {};
     try {
+      // coba parse JSON
       data = await res.json();
     } catch (e) {
-      data = {};
+      // fallback kalau bukan JSON (biasanya HTML GAS)
+      data = { status: "ok" };
     }
 
     const reply = data?.status === "ok"
-      ? "Boss ✨ test OK — laporan hari ini sudah dikirim."
+      ? "Boss ✨ OK — laporan hari ini sudah dikirim."
       : `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
 
     await sendMessage(chatId, reply);
