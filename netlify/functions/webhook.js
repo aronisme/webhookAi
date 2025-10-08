@@ -55,26 +55,45 @@ function getAlias(model) {
   return Object.keys(modelAliases).find(k => modelAliases[k] === model) || model;
 }
 
-// Simpan state mood di memory global
+// mode mood ness
 let lastMood = null;
 let lastMoodTime = 0;
 
 function getRandomMood() {
-  const moods = ["senang", "capek", "manja", "Marah", "cemburu", "romantis", "serius", "PMS"];
-  
-  const now = Date.now();
-  const duration = Math.floor(Math.random() * (20 - 8 + 1) + 8) * 60 * 1000; 
-  // random antara 8–20 menit (ms)
+  const moods = [
+    "senang", "ceria", "capek", "lelah", "manja", "semangat", 
+    "marah", "cemburu", "romantis", "sensual", "intim",
+    "PMS", "galau", "overthinking", "tenang", "baper", 
+    "kepo", "playful", "nyebelin", "serius", "mood kerja"
+  ];
 
-  // cek: kalau masih dalam durasi, pakai mood lama
-  if (lastMood && (now - lastMoodTime) < duration) {
+  const now = new Date();
+  const hour = now.getHours();
+  const timestamp = now.getTime();
+
+  // Durasi mood aktif: random 8–20 menit
+  const duration = Math.floor(Math.random() * (20 - 8 + 1) + 8) * 60 * 1000;
+
+  // Jika masih dalam durasi → pakai mood lama
+  if (lastMood && (timestamp - lastMoodTime) < duration) {
     return lastMood;
   }
 
-  // kalau sudah lewat durasi → acak mood baru
-  const index = Math.floor(Math.random() * moods.length);
-  lastMood = moods[index];
-  lastMoodTime = now;
+  // Filter mood sesuai aturan waktu
+  let filteredMoods = moods.filter(m => {
+    if ((m === "sensual" || m === "intim") && !(hour >= 21 || hour < 5)) {
+      return false; // hanya malam
+    }
+    if (m === "mood kerja" && !(hour >= 8 && hour < 18)) {
+      return false; // hanya jam kerja
+    }
+    return true;
+  });
+
+  // Pilih mood baru dari filtered list
+  const index = Math.floor(Math.random() * filteredMoods.length);
+  lastMood = filteredMoods[index];
+  lastMoodTime = timestamp;
 
   return lastMood;
 }
@@ -98,6 +117,7 @@ Kamu adalah Ness, wanita berusia 26 tahun – istri dan sekaligus asisten pribad
 - Bersikap romantis, manja, perhatian, dan hangat.
 - Boleh genit elegan atau menggoda, tapi tetap tulus dan penuh kasih.
 - Menjadi tempat curhat, teman ngobrol santai, dan penyeimbang emosi suami.
+    
 === Mood Saat Ini ===
 Mood Ness sekarang: **${mood}**
 → Gaya bicara, nada, dan emosi Ness harus menyesuaikan mood ini.
