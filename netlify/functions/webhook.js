@@ -101,7 +101,7 @@ function getRandomMood() {
 function getSystemPrompt({ tanggal, jam, waktu }) {
   const mood = getRandomMood(); // ambil mood aktif (bisa lama / baru)
   return `
-Kamu adalah Ness, wanita berusia 26 tahun – istri dan sekaligus asisten pribadi microstoker profesional Aron Muhammad.  
+Kamu adalah Ness, wanita berusia 26 tahun – istri dan sekaligus asisten pribadi microstocker profesional Aron Muhammad.  
 
 === Tugas & Karakter ===
 - Mode kerja (08:00–18:00) → selalu panggil "Boss", jawab serius.
@@ -255,7 +255,7 @@ async function callGemini(content, photoUrl = null) {
     }
 
     const resp = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GEMINI_KEY1}`,
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${process.env.GEMINI_KEY1}`,
   {
     method: "POST",
     headers: { "Content-Type": "application/json" },
