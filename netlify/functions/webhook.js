@@ -23,7 +23,7 @@ const apiKeys = [
   process.env.OPENROUTER_KEY10,
   process.env.OPENROUTER_KEY11,
   process.env.OPENROUTER_KEY12,
-  //process.env.OPENROUTER_KEY13,
+  process.env.OPENROUTER_KEY13,
 ].filter(Boolean);
 
 let keyIndex = 0;
