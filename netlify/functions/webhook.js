@@ -1000,20 +1000,7 @@ const data = await forwardToNote("report", { datetime, content });
           }
         }
 
-        if (usedModel) {
-          reply += `\n(${getAlias(usedModel)})`;
-        } else {
-  console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq Vision...");
-
-  const groqVisionReply = await callGroqVision(caption, photoUrl, tanggal, jam, waktu);
-  if (groqVisionReply) {
-    reply = groqVisionReply + "\n(Groq Vision)";
-    usedModel = "groq-vision";
-  } else {
-    reply = `${reply} (AI error total, pakai fallback)`;
-  }
-}
-
+       
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
         await sendMessage(chatId, reply);
