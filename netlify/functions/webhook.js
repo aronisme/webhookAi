@@ -23,7 +23,7 @@ const apiKeys = [
   process.env.OPENROUTER_KEY10,
   process.env.OPENROUTER_KEY11,
   process.env.OPENROUTER_KEY12,
-  process.env.OPENROUTER_KEY13,
+  //process.env.OPENROUTER_KEY13,
 ].filter(Boolean);
 
 let keyIndex = 0;
@@ -140,6 +140,8 @@ Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib dituli
 
 `.trim();
 }
+
+
 //endpoint ai free
 async function callFreeLLM(content, tanggal, jam, waktu) {
   try {
@@ -199,7 +201,7 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 16;
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 18;
 const userMemory = {};
 const userConfig = {};
 const fallbackReplies = [
