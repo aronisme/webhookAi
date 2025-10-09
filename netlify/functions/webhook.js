@@ -11,20 +11,23 @@ const commandRegex = /\/(semuacatatan|lihatcatatan|catat|aitest|jadwal|agenda|la
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
-  process.env.OPENROUTER_KEY13,
-  process.env.OPENROUTER_KEY12,
   process.env.OPENROUTER_KEY1,
-  process.env.OPENROUTER_KEY11,
-  process.env.OPENROUTER_KEY8,
-  process.env.OPENROUTER_KEY9,
-  process.env.OPENROUTER_KEY7,
   process.env.OPENROUTER_KEY2,
   process.env.OPENROUTER_KEY3,
-  process.env.OPENROUTER_KEY6,
-  process.env.OPENROUTER_KEY5,
   process.env.OPENROUTER_KEY4,
+  process.env.OPENROUTER_KEY5,
+  process.env.OPENROUTER_KEY6,
+  process.env.OPENROUTER_KEY7,
+  process.env.OPENROUTER_KEY8,
+  process.env.OPENROUTER_KEY9,
+  process.env.OPENROUTER_KEY10,
+  process.env.OPENROUTER_KEY11,
+  process.env.OPENROUTER_KEY12,
+  process.env.OPENROUTER_KEY13,
 ].filter(Boolean);
+
 let keyIndex = 0;
+
 
 const models = [
   "google/gemini-2.0-flash-exp:free",
@@ -164,7 +167,7 @@ function getWIBTimeInfo() {
   return { tanggal, jam, waktu };
 }
 
-const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 20;
+const MEMORY_LIMIT = parseInt(process.env.MEMORY_LIMIT, 10) || 16;
 const userMemory = {};
 const userConfig = {};
 const fallbackReplies = [
