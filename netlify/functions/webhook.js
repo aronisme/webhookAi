@@ -141,23 +141,17 @@ Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib dituli
 `.trim();
 }
 
-// ===== GROQ VISION FALLBACK =====
-async function callGroqVision(caption, photoUrl, tanggal, jam, waktu) {
+// ===== GROQ FALLBACK ===== 
+async function callGroq(content, tanggal, jam, waktu) {
   try {
     const systemPrompt = getSystemPrompt({ tanggal, jam, waktu });
 
     const payload = {
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: caption },
-            { type: "image_url", image_url: { url: photoUrl } }
-          ]
-        }
+        { role: "user", content }
       ],
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       temperature: 1,
       max_completion_tokens: 512,
       top_p: 1,
@@ -176,11 +170,10 @@ async function callGroqVision(caption, photoUrl, tanggal, jam, waktu) {
     const data = await resp.json();
     return data?.choices?.[0]?.message?.content?.trim() || null;
   } catch (err) {
-    console.error("Groq vision error:", err.message);
+    console.error("Groq fallback error:", err.message);
     return null;
   }
 }
-
 
 
 
@@ -1000,7 +993,19 @@ const data = await forwardToNote("report", { datetime, content });
           }
         }
 
-       
+        if (usedModel) {
+          reply += `\n(${getAlias(usedModel)})`;
+        } else {
+          console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API (vision)...");
+
+          const geminiReply = await callGemini(caption, photoUrl);
+          if (geminiReply) {
+            reply = geminiReply + "\n(Gemini API Vision)";
+            usedModel = "google/gemini-1.5-flash";
+          } else {
+            reply = `${reply} (AI error total, pakai fallback)`;
+          }
+        }
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
         await sendMessage(chatId, reply);
@@ -1011,21 +1016,6 @@ const data = await forwardToNote("report", { datetime, content });
         return { statusCode: 200, body: "image error" };
       }
     }
-
-    if (usedModel) {
-  reply += `\n(${getAlias(usedModel)})`;
-} else {
-  console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq Vision...");
-
-  const groqVisionReply = await callGroqVision(caption, photoUrl, tanggal, jam, waktu);
-  if (groqVisionReply) {
-    reply = groqVisionReply + "\n(Groq Vision)";
-    usedModel = "groq-vision";
-  } else {
-    reply = `${reply} (AI error total, pakai fallback)`;
-  }
-}
-
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
