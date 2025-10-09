@@ -141,18 +141,23 @@ Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib dituli
 `.trim();
 }
 
-
-// ===== GROQ FALLBACK ===== 
-async function callGroq(content, tanggal, jam, waktu) {
+// ===== GROQ VISION FALLBACK =====
+async function callGroqVision(caption, photoUrl, tanggal, jam, waktu) {
   try {
     const systemPrompt = getSystemPrompt({ tanggal, jam, waktu });
 
     const payload = {
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content }
+        {
+          role: "user",
+          content: [
+            { type: "text", text: caption },
+            { type: "image_url", image_url: { url: photoUrl } }
+          ]
+        }
       ],
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
       temperature: 1,
       max_completion_tokens: 512,
       top_p: 1,
@@ -171,10 +176,11 @@ async function callGroq(content, tanggal, jam, waktu) {
     const data = await resp.json();
     return data?.choices?.[0]?.message?.content?.trim() || null;
   } catch (err) {
-    console.error("Groq fallback error:", err.message);
+    console.error("Groq vision error:", err.message);
     return null;
   }
 }
+
 
 
 
@@ -548,21 +554,16 @@ Pesan terbaru: ${text}
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
       } else {
-        console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+       console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
 
-        const geminiReply = await callGemini(contextText);
-if (geminiReply) {
-  reply = geminiReply + "\n(Gemini API)";
-  usedModel = "google/gemini-1.5-flash";
-} else {
-  console.log("⚠️ Gemini gagal, coba Groq fallback...");
 const groqReply = await callGroq(contextText, tanggal, jam, waktu);
 if (groqReply) {
   reply = groqReply + "\n(Groq Fallback)";
   usedModel = "groq";
+} else {
+  reply = `${reply} (AI error total, semua fallback gagal)`;
 }
 
-}
 
 
       }
@@ -1002,16 +1003,17 @@ const data = await forwardToNote("report", { datetime, content });
         if (usedModel) {
           reply += `\n(${getAlias(usedModel)})`;
         } else {
-          console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API (vision)...");
+  console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq Vision...");
 
-          const geminiReply = await callGemini(caption, photoUrl);
-          if (geminiReply) {
-            reply = geminiReply + "\n(Gemini API Vision)";
-            usedModel = "google/gemini-1.5-flash";
-          } else {
-            reply = `${reply} (AI error total, pakai fallback)`;
-          }
-        }
+  const groqVisionReply = await callGroqVision(caption, photoUrl, tanggal, jam, waktu);
+  if (groqVisionReply) {
+    reply = groqVisionReply + "\n(Groq Vision)";
+    usedModel = "groq-vision";
+  } else {
+    reply = `${reply} (AI error total, pakai fallback)`;
+  }
+}
+
 
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
         await sendMessage(chatId, reply);
@@ -1022,6 +1024,21 @@ const data = await forwardToNote("report", { datetime, content });
         return { statusCode: 200, body: "image error" };
       }
     }
+
+    if (usedModel) {
+  reply += `\n(${getAlias(usedModel)})`;
+} else {
+  console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq Vision...");
+
+  const groqVisionReply = await callGroqVision(caption, photoUrl, tanggal, jam, waktu);
+  if (groqVisionReply) {
+    reply = groqVisionReply + "\n(Groq Vision)";
+    usedModel = "groq-vision";
+  } else {
+    reply = `${reply} (AI error total, pakai fallback)`;
+  }
+}
+
 
     // ==== ELSE → AI ====
     if (!userMemory[chatId]) userMemory[chatId] = [];
@@ -1110,21 +1127,16 @@ Pesan terbaru Boss: ${text}
     if (usedModel) {
       reply += `\n(${getAlias(usedModel)})`;
     } else {
-      console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
+      console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
 
-      const geminiReply = await callGemini(contextText);
-if (geminiReply) {
-  reply = geminiReply + "\n(Gemini API)";
-  usedModel = "google/gemini-1.5-flash";
-} else {
-  console.log("⚠️ Gemini gagal, coba Groq fallback...");
 const groqReply = await callGroq(contextText, tanggal, jam, waktu);
 if (groqReply) {
   reply = groqReply + "\n(Groq Fallback)";
   usedModel = "groq";
+} else {
+  reply = `${reply} (AI error total, semua fallback gagal)`;
 }
 
-}
 
 
     }
