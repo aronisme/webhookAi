@@ -140,6 +140,38 @@ Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib dituli
 
 `.trim();
 }
+//endpoint ai free
+async function callFreeLLM(content, tanggal, jam, waktu) {
+  try {
+    const systemPrompt = getSystemPrompt({ tanggal, jam, waktu });
+    const fullPrompt = `${systemPrompt}\n\nUser: ${content}`;
+
+    const resp = await fetch("https://apifreellm.com/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: fullPrompt }),
+    });
+
+    const txt = await resp.text();
+
+    if (txt.trim().startsWith("{")) {
+      const json = JSON.parse(txt);
+      if (json.status === "success") {
+        return json.response;
+      } else {
+        console.error("FreeLLM error:", json.error);
+        return null;
+      }
+    } else {
+      console.error("FreeLLM bukan JSON:", txt);
+      return null;
+    }
+  } catch (err) {
+    console.error("FreeLLM fetch error:", err.message);
+    return null;
+  }
+}
+
 
 
 
@@ -514,12 +546,21 @@ Pesan terbaru: ${text}
         console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
 
         const geminiReply = await callGemini(contextText);
-        if (geminiReply) {
-          reply = geminiReply + "\n(Gemini API)";
-          usedModel = "google/gemini-1.5-flash";
-        } else {
-          reply = `${reply} (AI error total, pakai fallback)`;
-        }
+if (geminiReply) {
+  reply = geminiReply + "\n(Gemini API)";
+  usedModel = "google/gemini-1.5-flash";
+} else {
+  console.log("⚠️ Gemini gagal, coba FreeLLM endpoint...");
+  const freeReply = await callFreeLLM(contextText, tanggal, jam, waktu);
+  if (freeReply) {
+    reply = freeReply + "\n(FreeLLM)";
+    usedModel = "freellm";
+  } else {
+    reply = `${reply} (AI error total, semua fallback gagal)`;
+  }
+}
+
+
       }
 
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -1068,12 +1109,21 @@ Pesan terbaru Boss: ${text}
       console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API...");
 
       const geminiReply = await callGemini(contextText);
-      if (geminiReply) {
-        reply = geminiReply + "\n(Gemini API)";
-        usedModel = "google/gemini-1.5-flash";
-      } else {
-        reply = `${reply} (AI error total, pakai fallback)`;
-      }
+if (geminiReply) {
+  reply = geminiReply + "\n(Gemini API)";
+  usedModel = "google/gemini-1.5-flash";
+} else {
+  console.log("⚠️ Gemini gagal, coba FreeLLM endpoint...");
+  const freeReply = await callFreeLLM(contextText, tanggal, jam, waktu);
+  if (freeReply) {
+    reply = freeReply + "\n(FreeLLM)";
+    usedModel = "freellm";
+  } else {
+    reply = `${reply} (AI error total, semua fallback gagal)`;
+  }
+}
+
+
     }
 
     // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
