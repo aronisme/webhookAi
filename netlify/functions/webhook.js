@@ -123,7 +123,7 @@ Kamu adalah Ness, wanita berusia 26 tahun – istri & asisten pribadi microstock
 
 === ⚡ FORMAT WAJIB (HARUS DIPATUHI) ===
 - ⚠️ Format wajib hanya berlaku jika prompt dari Boss. Jika prompt dari otak Ness atau memory sistem jangan ikuti format wajib.
-- **Format WAJIB diakhiri dengan tanda "|" (pipe)**. Format ini adalah command yang terbaca sistem.
+- **Format WAJIB diakhiri dengan tanda "|" (pipe)**. ⚠️ Jangan pakai format ini kecuali pada instruksi tersebut.
 Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib ditulis ulang pakai format berikut.
 - /ceklaporan | → untuk meminta sistem menampilkan laporan hari ini.    
 - /mingguini | → untuk meminta sistem menampilkan laporan mingguan.
@@ -142,37 +142,40 @@ Semua instruksi lihat/tanya data atau buat/tulis data dari Boss → wajib dituli
 }
 
 
-//endpoint ai free
-async function callFreeLLM(content, tanggal, jam, waktu) {
+// ===== GROQ FALLBACK ===== 
+async function callGroq(content, tanggal, jam, waktu) {
   try {
     const systemPrompt = getSystemPrompt({ tanggal, jam, waktu });
-    const fullPrompt = `${systemPrompt}\n\nUser: ${content}`;
 
-    const resp = await fetch("https://apifreellm.com/api/chat", {
+    const payload = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content }
+      ],
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      temperature: 1,
+      max_completion_tokens: 512,
+      top_p: 1,
+      stream: false
+    };
+
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: fullPrompt }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify(payload)
     });
 
-    const txt = await resp.text();
-
-    if (txt.trim().startsWith("{")) {
-      const json = JSON.parse(txt);
-      if (json.status === "success") {
-        return json.response;
-      } else {
-        console.error("FreeLLM error:", json.error);
-        return null;
-      }
-    } else {
-      console.error("FreeLLM bukan JSON:", txt);
-      return null;
-    }
+    const data = await resp.json();
+    return data?.choices?.[0]?.message?.content?.trim() || null;
   } catch (err) {
-    console.error("FreeLLM fetch error:", err.message);
+    console.error("Groq fallback error:", err.message);
     return null;
   }
 }
+
 
 
 
@@ -552,14 +555,13 @@ if (geminiReply) {
   reply = geminiReply + "\n(Gemini API)";
   usedModel = "google/gemini-1.5-flash";
 } else {
-  console.log("⚠️ Gemini gagal, coba FreeLLM endpoint...");
-  const freeReply = await callFreeLLM(contextText, tanggal, jam, waktu);
-  if (freeReply) {
-    reply = freeReply + "\n(FreeLLM)";
-    usedModel = "freellm";
-  } else {
-    reply = `${reply} (AI error total, semua fallback gagal)`;
-  }
+  console.log("⚠️ Gemini gagal, coba Groq fallback...");
+const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+if (groqReply) {
+  reply = groqReply + "\n(Groq Fallback)";
+  usedModel = "groq";
+}
+
 }
 
 
@@ -1115,14 +1117,13 @@ if (geminiReply) {
   reply = geminiReply + "\n(Gemini API)";
   usedModel = "google/gemini-1.5-flash";
 } else {
-  console.log("⚠️ Gemini gagal, coba FreeLLM endpoint...");
-  const freeReply = await callFreeLLM(contextText, tanggal, jam, waktu);
-  if (freeReply) {
-    reply = freeReply + "\n(FreeLLM)";
-    usedModel = "freellm";
-  } else {
-    reply = `${reply} (AI error total, semua fallback gagal)`;
-  }
+  console.log("⚠️ Gemini gagal, coba Groq fallback...");
+const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+if (groqReply) {
+  reply = groqReply + "\n(Groq Fallback)";
+  usedModel = "groq";
+}
+
 }
 
 
