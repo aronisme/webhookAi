@@ -7,7 +7,7 @@ const BASE_URL = process.env.BASE_URL;
 // ===== Regex untuk command di mana saja =====
 // Format: /command isi|
 // Regex menangkap command + semua teks hingga tanda "|" pertama (tidak mendukung | di dalam isi)
-const commandRegex = /\/(semuacatatan|lihatcatatan|catat|jadwal|agenda|lapor|mingguini|semuajadwal|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
+const commandRegex = /\/(semuacatatan|lihatcatatan|catat|aitest|jadwal|agenda|lapor|mingguini|semuajadwal|model|gemini|maverick|ceklaporan|test|mistral31|mistral32|mistral7b|dolphin|dolphin3|grok|qwen480|qwen235|llama70)([^|]*)\|/gi;
 
 // ===== OpenRouter keys & models =====
 const apiKeys = [
@@ -289,6 +289,159 @@ async function forwardToNote(type, payload) {
   }
 }
 
+//aitest
+
+// ===== AITEST HELPERS =====
+async function testOpenRouterKey(apiKey, modelToTest = models[0], timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const payload = {
+      model: modelToTest,
+      messages: [
+        { role: "system", content: "Ping test" },
+        { role: "user", content: "Ping" }
+      ],
+    };
+
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(id);
+
+    // status handling
+    if (resp.status === 401 || resp.status === 403) {
+      return { ok: false, status: resp.status, note: "Unauthorized / invalid key" };
+    }
+    if (resp.status === 429) {
+      return { ok: false, status: resp.status, note: "Rate limited (429)" };
+    }
+    if (resp.status >= 500) {
+      return { ok: false, status: resp.status, note: "Server error" };
+    }
+
+    // try to parse body (may be json or text)
+    let txt = await resp.text();
+    let parsed;
+    try { parsed = JSON.parse(txt); } catch (e) { parsed = null; }
+
+    // heuristics
+    if (parsed && parsed?.choices && parsed.choices[0]?.message?.content) {
+      return { ok: true, status: resp.status, note: "OK", detail: parsed.choices[0].message.content.slice(0,200) };
+    } else if (txt && txt.length > 0) {
+      return { ok: true, status: resp.status, note: "OK (nonstandard response)", detail: txt.slice(0,200) };
+    } else {
+      return { ok: false, status: resp.status, note: "Empty response body" };
+    }
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return { ok: false, status: "timeout", note: `Timeout after ${timeoutMs}ms` };
+    }
+    return { ok: false, status: "error", note: err.message };
+  }
+}
+
+async function testGeminiKey(timeoutMs = 8000) {
+  if (!process.env.GEMINI_KEY1) {
+    return { ok: false, status: "no_key", note: "GEMINI_KEY1 not set" };
+  }
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-09-2025:generateContent?key=${process.env.GEMINI_KEY1}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "ping" }] }] }),
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(id);
+    if (resp.status === 403 || resp.status === 401) return { ok: false, status: resp.status, note: "Gemini key unauthorized" };
+    if (resp.status === 429) return { ok: false, status: resp.status, note: "Gemini rate limited (429)" };
+    let data;
+    try { data = await resp.json(); } catch (e) { return { ok: false, status: resp.status, note: "Non-JSON response" }; }
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text ? { ok: true, status: resp.status, note: "OK", detail: text.slice(0,200) } : { ok: false, status: resp.status, note: "No text in response" };
+  } catch (err) {
+    if (err.name === "AbortError") return { ok: false, status: "timeout", note: `Timeout after ${timeoutMs}ms` };
+    return { ok: false, status: "error", note: err.message };
+  }
+}
+
+async function testGASQuickPing() {
+  if (!GAS_URL) return { ok: false, note: "GAS_URL not set" };
+  try {
+    const res = await fetch(GAS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: "ping" }) });
+    let txt = await res.text().catch(() => "");
+    // try parse
+    try {
+      const json = JSON.parse(txt);
+      return { ok: true, note: "GAS responded", detail: JSON.stringify(json).slice(0,400) };
+    } catch (e) {
+      return { ok: true, note: "GAS responded (non-JSON)", detail: txt.slice(0,400) };
+    }
+  } catch (err) {
+    return { ok: false, note: err.message };
+  }
+}
+
+/**
+ * runAITest(chatId)
+ * - iterates over apiKeys and does a lightweight test
+ * - checks Gemini key
+ * - checks GAS quick ping
+ * - sends condensed log back to chatId
+ */
+async function runAITest(chatId) {
+  const lines = [];
+  lines.push("🔬 Mulai AITEST — cek semua API keys...");
+
+  // test OpenRouter keys (one per key, using first model)
+  if (!apiKeys || apiKeys.length === 0) {
+    lines.push("• OpenRouter: tidak ada apiKeys terdaftar.");
+  } else {
+    for (let i = 0; i < apiKeys.length; i++) {
+      const apikey = apiKeys[i];
+      try {
+        const res = await testOpenRouterKey(apikey);
+        lines.push(`• OpenRouter key #${i + 1}: ${res.ok ? "OK ✅" : "FAIL ❌"} — ${res.note}${res.detail ? " — " + (res.detail) : ""}`);
+      } catch (err) {
+        lines.push(`• OpenRouter key #${i + 1}: EXCEPTION — ${err.message}`);
+      }
+    }
+  }
+
+  // test Gemini
+  const gem = await testGeminiKey();
+  lines.push(`• Gemini key: ${gem.ok ? "OK ✅" : "FAIL ❌"} — ${gem.note}${gem.detail ? " — " + gem.detail : ""}`);
+
+  // quick GAS ping
+  const gas = await testGASQuickPing();
+  lines.push(`• GAS: ${gas.ok ? "OK ✅" : "FAIL ❌"} — ${gas.note}${gas.detail ? " — " + gas.detail : ""}`);
+
+  lines.push("\nSelesai. Kalau banyak FAIL, cek env vars & quota.");
+  // send multi-part message if too long
+  const chunkSize = 4000;
+  let msg = lines.join("\n");
+  while (msg.length > 0) {
+    const part = msg.slice(0, chunkSize);
+    await sendMessage(chatId, part);
+    msg = msg.slice(chunkSize);
+  }
+}
+
+
 // ===== Main handler =====
 exports.handler = async function (event) {
   try {
@@ -434,6 +587,17 @@ Pesan terbaru: ${text}
           : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
+            else if (cmd === "aitest") {
+        await sendMessage(chatId, "Mulai AITEST... cek tiap key, tunggu sebentar ya Boss.");
+        try {
+          await runAITest(chatId);
+        } catch (e) {
+          console.error("AITEST error:", e);
+          await sendMessage(chatId, `AITEST gagal: ${e.message}`);
+        }
+      }
+
+//cmd lapor
      else if (cmd === "lapor") {
   const content = args.trim();
   if (!content) {
