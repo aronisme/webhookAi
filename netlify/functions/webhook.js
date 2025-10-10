@@ -114,6 +114,7 @@ Kamu adalah Ness, wanita 26 tahun – istri & asisten pribadi microstocker profe
 - Boleh emoji, manja/genit elegan, tulus penuh kasih.
 - Mood Ness: **${mood}**, balas sesuai mood.
 - Sekarang ${tanggal}, jam ${jam}, masih ${waktu}.
+- ⚠️ Jangan pakai cmd jika menyampaikan laporan,jadwal, catatan.
 - ⚠️ Jangan pernah mengarang data/jadwal/laporan/catatan yang tidak ada.
 
 === Sumber Prompt ===
@@ -130,7 +131,7 @@ Gunakan format dengan tanda "|" di akhir:
 - /semuajadwal | → semua jadwal  
 - /catat isi | → simpan catatan  
 - /jadwal YYYY-MM-DD HH:MM isi | → simpan jadwal  
-- /lapor isi laporan kerja | → simpan/update laporan  
+- /lapor isi laporan kerja | → simpan/update laporan ke memory sistem.  
 
 === Peringatan ===
 - Jika data/jadwal/catatan kosong → jawab jujur, jangan isi dengan karangan.
@@ -476,12 +477,103 @@ async function runAITest(chatId) {
   }
 }
 
+// ===== Konstanta Utama =====
+const GAS_MAIN_URL = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec";
 
 // ===== Main handler =====
 exports.handler = async function (event) {
   try {
     // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
+
+    // ==== 🔹 1a. HANDLE TRIGGER VIA POST BODY (cmd) dari GAS ====
+    if (event.httpMethod === "POST" && !params.cmd) {
+      try {
+        const body = JSON.parse(event.body || "{}");
+        if (body.cmd) {
+          const chatId = body.chatId || "1296836457";
+          const text = body.cmd.trim();
+
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
+          userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
+          await typing(chatId);
+
+          const { tanggal, jam, waktu } = getWIBTimeInfo();
+          const contextText = `
+Kamu adalah Ness, asisten pribadi dan Istri.
+Riwayat percakapan:
+${userMemory[chatId]
+  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
+  .join("\n")}
+Pesan terbaru: ${text}
+          `.trim();
+
+          let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+          let usedModel = null;
+
+          outerLoop: for (const model of models) {
+            for (let i = 0; i < apiKeys.length; i++) {
+              const apiKey = apiKeys[keyIndex];
+              keyIndex = (keyIndex + 1) % apiKeys.length;
+
+              try {
+                const payload = {
+                  model,
+                  messages: [
+                    { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
+                    { role: "user", content: contextText }
+                  ],
+                };
+
+                const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify(payload),
+                });
+
+                const data = await resp.json();
+                if (data?.choices?.[0]?.message?.content) {
+                  reply = data.choices[0].message.content.trim();
+                  usedModel = model;
+                  break outerLoop;
+                }
+              } catch (err) {
+                console.error(`OpenRouter error [${model}]`, err.message);
+              }
+            }
+          }
+
+          if (usedModel) {
+            reply += `\n(${getAlias(usedModel)})`;
+          } else {
+            console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
+            const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+            if (groqReply) {
+              reply = groqReply + "\n(Groq Fallback)";
+              usedModel = "groq";
+            } else {
+              reply = `${reply} (AI error total, semua fallback gagal)`;
+            }
+          }
+
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          userMemory[chatId] = summarizeContext(userMemory[chatId]);
+          await sendMessage(chatId, reply);
+
+          return { statusCode: 200, body: JSON.stringify({ status: "ok", from: "post-body-cmd" }) };
+        }
+      } catch (err) {
+        console.error("POST body trigger error:", err);
+        return { statusCode: 500, body: JSON.stringify({ error: "Invalid POST body" }) };
+      }
+    }
+
+    // ==== 🔹 1b. HANDLE TRIGGER VIA QUERY STRING (cmd) ====
     if (params.cmd) {
       const chatId = "1296836457";
       const text = params.cmd.trim();
@@ -543,18 +635,14 @@ Pesan terbaru: ${text}
       if (usedModel) {
         reply += `\n(${getAlias(usedModel)})`;
       } else {
-       console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
-
-const groqReply = await callGroq(contextText, tanggal, jam, waktu);
-if (groqReply) {
-  reply = groqReply + "\n(Groq Fallback)";
-  usedModel = "groq";
-} else {
-  reply = `${reply} (AI error total, semua fallback gagal)`;
-}
-
-
-
+        console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
+        const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+        if (groqReply) {
+          reply = groqReply + "\n(Groq Fallback)";
+          usedModel = "groq";
+        } else {
+          reply = `${reply} (AI error total, semua fallback gagal)`;
+        }
       }
 
       userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
@@ -569,8 +657,6 @@ if (groqReply) {
       return { statusCode: 405, body: "Method Not Allowed" };
     if (!TELEGRAM_BOT_TOKEN)
       return { statusCode: 500, body: "Missing TELEGRAM_BOT_TOKEN" };
-    if (!GAS_URL)
-      return { statusCode: 500, body: "Missing GAS_URL" };
     if (!BASE_URL)
       return { statusCode: 500, body: "Missing BASE_URL" };
 
@@ -625,7 +711,7 @@ if (groqReply) {
           : `Boss ❌ gagal simpan jadwal: ${data?.error || "unknown error"}`);
       }
 
-            else if (cmd === "aitest") {
+      else if (cmd === "aitest") {
         await sendMessage(chatId, "Mulai AITEST... cek tiap key, tunggu sebentar ya Boss.");
         try {
           await runAITest(chatId);
@@ -635,45 +721,33 @@ if (groqReply) {
         }
       }
 
-//cmd lapor
-     else if (cmd === "lapor") {
-  const content = args.trim();
-  if (!content) {
-    await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/lapor upload 30 image ke Adobe|`");
-    return;
-  }
-//kirim laporan
-else if (cmd === "kirimlaporan") {
-  const url = `${GAS_URL}&cmd=sendTodayReportToBot`;
-  const res = await fetch(url);
-  const data = await res.json().catch(() => ({}));
+      else if (cmd === "lapor") {
+        const content = args.trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/lapor upload 30 image ke Adobe|`");
+          continue;
+        }
+        const now = new Date();
+        const pad = n => n.toString().padStart(2, "0");
+        const datetime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const data = await forwardToNote("report", { datetime, content });
+        await sendMessage(chatId,
+          data?.status === "success"
+            ? `Boss ✨ laporan tersimpan (${datetime}): ${content}`
+            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
+        );
+      }
 
-  await sendMessage(chatId,
-    data?.status === "ok"
-      ? "Boss ✨ laporan hari ini sudah dikirim ke Ness."
-      : "Boss ❌ gagal kirim laporan."
-  );
-}
-
-
-
-
-
-//lain imi
-
-  const now = new Date();
-  const pad = n => n.toString().padStart(2, "0");
-  const datetime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
-  const data = await forwardToNote("report", { datetime, content });
-
-  await sendMessage(chatId,
-    data?.status === "success"
-      ? `Boss ✨ laporan tersimpan (${datetime}): ${content}`
-      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
-  );
-}
-
+      else if (cmd === "kirimlaporan") {
+        const url = `${GAS_MAIN_URL}?cmd=sendTodayReportToBot`;
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        await sendMessage(chatId,
+          data?.status === "ok"
+            ? "Boss ✨ laporan hari ini sudah dikirim ke Ness."
+            : "Boss ❌ gagal kirim laporan."
+        );
+      }
 
       else if (cmd === "lihatcatatan") {
         const q = args;
@@ -686,185 +760,124 @@ else if (cmd === "kirimlaporan") {
           : "(kosong)";
         const reply = `Boss ✨ Catatan:\n${lines}`;
         await sendMessage(chatId, reply);
-
         if (!userMemory[chatId]) userMemory[chatId] = [];
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
-else if (cmd === "lihatlaporan") {
-  try {
-    // URL GAS
-    const url = "https://script.google.com/macros/s/AKfycbySQe6MVYTizv1hAGLKHLCw2AZ5iNIT8DftkBjRjjSJrEjMkhUXJDTwj3poLgSarvg9/exec?cmd=sendTodayReportToBot";
-    
-    // Panggil endpoint
-    const res = await fetch(url);
-    const data = await res.json().catch(() => ({}));
 
-    const reply = `Laporan hari ini: ${JSON.stringify(data)}`;
+      else if (cmd === "lihatlaporan") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=sendTodayReportToBot`;
+          const res = await fetch(url);
+          const data = await res.json().catch(() => ({}));
+          const reply = `Laporan hari ini: ${JSON.stringify(data)}`;
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          await sendMessage(chatId, reply);
+        } catch (e) {
+          console.error("Error lihatlaporan:", e);
+          await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
+        }
+      }
 
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+      else if (cmd === "ceklaporan") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=sendTodayReportToBot`;
+          const res = await fetch(url);
+          let data = {};
+          try { data = await res.json(); } catch (e) { data = { status: "ok" }; }
+          if (!(data?.status === "ok")) {
+            const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+            await sendMessage(chatId, reply);
+            if (!userMemory[chatId]) userMemory[chatId] = [];
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          }
+        } catch (err) {
+          const reply = `Boss ❌ error test: ${err.message}`;
+          await sendMessage(chatId, reply);
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        }
+      }
 
-    await sendMessage(chatId, reply);
+      else if (cmd === "semuajadwal") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=sendAllSchedulesToBot`;
+          const res = await fetch(url);
+          let data = {};
+          try { data = await res.json(); } catch (e) { data = { status: "ok" }; }
+          if (!(data?.status === "ok")) {
+            const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+            await sendMessage(chatId, reply);
+            if (!userMemory[chatId]) userMemory[chatId] = [];
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          }
+        } catch (err) {
+          const reply = `Boss ❌ error test: ${err.message}`;
+          await sendMessage(chatId, reply);
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        }
+      }
 
-  } catch (e) {
-    console.error("Error lihatlaporan:", e);
-    await sendMessage(chatId, "⚠️ Gagal ambil laporan, coba lagi nanti Boss.");
-  }
-}
-else if (cmd === "ceklaporan") {
-  try {
-    const url = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec?cmd=sendTodayReportToBot";
-    const res = await fetch(url);
+      else if (cmd === "mingguini") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=summarizeReportsLast7Days`;
+          const res = await fetch(url);
+          let data = {};
+          try { data = await res.json(); } catch (e) { data = { status: "ok" }; }
+          if (!(data?.status === "ok")) {
+            const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+            await sendMessage(chatId, reply);
+            if (!userMemory[chatId]) userMemory[chatId] = [];
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          }
+        } catch (err) {
+          const reply = `Boss ❌ error test: ${err.message}`;
+          await sendMessage(chatId, reply);
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        }
+      }
 
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = { status: "ok" }; // fallback
-    }
+      else if (cmd === "agenda") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=sendTodaySchedulesToBot`;
+          const res = await fetch(url);
+          let data = {};
+          try { data = await res.json(); } catch (e) { data = { status: "ok" }; }
+          if (!(data?.status === "ok")) {
+            const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+            await sendMessage(chatId, reply);
+            if (!userMemory[chatId]) userMemory[chatId] = [];
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          }
+        } catch (err) {
+          const reply = `Boss ❌ error test: ${err.message}`;
+          await sendMessage(chatId, reply);
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        }
+      }
 
-    // Hanya kirim pesan kalau gagal
-    if (!(data?.status === "ok")) {
-      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-      await sendMessage(chatId, reply);
-
-      if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    }
-
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  }
-}
-
-
-else if (cmd === "semuajadwal") {
-  try {
-    const url = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec?cmd=sendAllSchedulesToBot";
-    const res = await fetch(url);
-
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = { status: "ok" }; // fallback
-    }
-
-    // Hanya kirim pesan kalau gagal
-    if (!(data?.status === "ok")) {
-      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-      await sendMessage(chatId, reply);
-
-      if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    }
-
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  }
-}
-
-
-else if (cmd === "mingguini") {
-  try {
-    const url = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec?cmd=summarizeReportsLast7Days";
-    const res = await fetch(url);
-
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = { status: "ok" }; // fallback
-    }
-
-    // Hanya kirim pesan kalau gagal
-    if (!(data?.status === "ok")) {
-      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-      await sendMessage(chatId, reply);
-
-      if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    }
-
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  }
-}
-
-
-else if (cmd === "agenda") {
-  try {
-    const url = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec?cmd=sendTodaySchedulesToBot";
-    const res = await fetch(url);
-
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = { status: "ok" }; // fallback
-    }
-
-    // Hanya kirim pesan kalau gagal
-    if (!(data?.status === "ok")) {
-      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-      await sendMessage(chatId, reply);
-
-      if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    }
-
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  }
-}
-
-
-else if (cmd === "semuacatatan") {
-  try {
-    const url = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec?cmd=sendAllNotesToBot";
-    const res = await fetch(url);
-
-    let data = {};
-    try {
-      data = await res.json()
-    } catch (e) {
-      data = { status: "ok" }; // fallback
-    }
-
-    // Hanya kirim pesan kalau gagal
-    if (!(data?.status === "ok")) {
-      const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
-      await sendMessage(chatId, reply);
-
-      if (!userMemory[chatId]) userMemory[chatId] = [];
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-    }
-
-  } catch (err) {
-    const reply = `Boss ❌ error test: ${err.message}`;
-    await sendMessage(chatId, reply);
-
-    if (!userMemory[chatId]) userMemory[chatId] = [];
-    userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-  }
-}
-
+      else if (cmd === "semuacatatan") {
+        try {
+          const url = `${GAS_MAIN_URL}?cmd=sendAllNotesToBot`;
+          const res = await fetch(url);
+          let data = {};
+          try { data = await res.json(); } catch (e) { data = { status: "ok" }; }
+          if (!(data?.status === "ok")) {
+            const reply = `Boss ❌ gagal eksekusi test: ${data?.error || "unknown error"}`;
+            await sendMessage(chatId, reply);
+            if (!userMemory[chatId]) userMemory[chatId] = [];
+            userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+          }
+        } catch (err) {
+          const reply = `Boss ❌ error test: ${err.message}`;
+          await sendMessage(chatId, reply);
+          if (!userMemory[chatId]) userMemory[chatId] = [];
+          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        }
+      }
 
       else if (cmd === "lihatjadwal") {
         const q = args;
@@ -877,37 +890,26 @@ else if (cmd === "semuacatatan") {
           : "(kosong)";
         const reply = `Boss ✨ Jadwal:\n${lines}`;
         await sendMessage(chatId, reply);
-
         if (!userMemory[chatId]) userMemory[chatId] = [];
         userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
       }
 
-      
-
-     
-
       else if (cmd === "laporan") {
-  const content = args.trim();
-  if (!content) {
-    await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
-    continue;
-  }
-
-  const { tanggal, jam } = getWIBTimeInfo();
-const datetime = `${tanggal} ${jam}`;
-const data = await forwardToNote("report", { datetime, content });
-
-  await sendMessage(
-    chatId,
-    data?.status === "success"
-      ? `Boss ✨ laporan tersimpan (${tanggal}): ${content}`
-      : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
-  );
-}
-
-
-     
-
+        const content = args.trim();
+        if (!content) {
+          await sendMessage(chatId, "Boss, isi laporan dulu! Contoh: `/laporan upload 20 image ke Adobe|`");
+          continue;
+        }
+        const { tanggal, jam } = getWIBTimeInfo();
+        const datetime = `${tanggal} ${jam}`;
+        const data = await forwardToNote("report", { datetime, content });
+        await sendMessage(
+          chatId,
+          data?.status === "success"
+            ? `Boss ✨ laporan tersimpan (${tanggal}): ${content}`
+            : `Boss ❌ gagal simpan laporan: ${data?.error || "unknown error"}`
+        );
+      }
     }
 
     if (matched) {
@@ -993,7 +995,6 @@ const data = await forwardToNote("report", { datetime, content });
           reply += `\n(${getAlias(usedModel)})`;
         } else {
           console.log("⚠️ Semua OpenRouter gagal, fallback ke Google Gemini API (vision)...");
-
           const geminiReply = await callGemini(caption, photoUrl);
           if (geminiReply) {
             reply = geminiReply + "\n(Gemini API Vision)";
@@ -1101,17 +1102,13 @@ Pesan terbaru Boss: ${text}
       reply += `\n(${getAlias(usedModel)})`;
     } else {
       console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
-
-const groqReply = await callGroq(contextText, tanggal, jam, waktu);
-if (groqReply) {
-  reply = groqReply + "\n(Groq Fallback)";
-  usedModel = "groq";
-} else {
-  reply = `${reply} (AI error total, semua fallback gagal)`;
-}
-
-
-
+      const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+      if (groqReply) {
+        reply = groqReply + "\n(Groq Fallback)";
+        usedModel = "groq";
+      } else {
+        reply = `${reply} (AI error total, semua fallback gagal)`;
+      }
     }
 
     // 🔁 CEK APAKAH BALASAN AI MENGANDUNG COMMAND
