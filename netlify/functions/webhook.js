@@ -485,8 +485,8 @@ exports.handler = async function (event) {
   try {
     // ==== 🔹 1. HANDLE TRIGGER VIA QUERY (cmd) ====
     const params = event.queryStringParameters || {};
-
-    // ==== 🔹 1a. HANDLE TRIGGER VIA POST BODY (cmd) dari GAS ====
+    
+// ==== 🔹 1a. HANDLE TRIGGER VIA POST BODY (cmd) dari GAS ====
 if (event.httpMethod === "POST" && !params.cmd) {
   try {
     const body = JSON.parse(event.body || "{}");
@@ -499,12 +499,49 @@ if (event.httpMethod === "POST" && !params.cmd) {
       userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
-      // kirim langsung ke bot (tanpa AI)
+      // 1. kirim langsung ke bot (tanpa AI)
       await sendMessage(chatId, text);
 
-      // tambahkan catatan internal ke memory AI
-      userMemory[chatId].push({ text: `AI-note: baca data`, timestamp: Date.now() });
-      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+      // 2. otomatis kirim ke AI dengan pesan "baca data"
+      const aiCmd = "baca data";
+      const { tanggal, jam, waktu } = getWIBTimeInfo();
+      const contextText = `
+Kamu adalah Ness, asisten pribadi cewek. Selalu panggil user "Boss".
+Riwayat percakapan:
+${userMemory[chatId]
+  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
+  .join("\n")}
+Pesan terbaru Boss: ${aiCmd}
+      `.trim();
+
+      let reply = "";
+      let usedModel = "";
+
+      try {
+        const geminiReply = await callGemini(contextText);
+        if (geminiReply) {
+          reply = geminiReply;
+          usedModel = "google/gemini-2.5-flash-lite";
+        } else {
+          const groqReply = await callGroq(contextText, tanggal, jam, waktu);
+          if (groqReply) {
+            reply = groqReply;
+            usedModel = "groq";
+          } else {
+            reply = "(AI error total, semua fallback gagal)";
+          }
+        }
+      } catch (err) {
+        console.error("AI error in baca data:", err);
+        reply = "(AI error exception)";
+      }
+
+      // kirim hasil balasan AI ke Telegram juga
+      if (reply) {
+        await sendMessage(chatId, `🤖 (auto) ${reply}`);
+        userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
+        userMemory[chatId] = summarizeContext(userMemory[chatId]);
+      }
 
       return {
         statusCode: 200,
@@ -513,7 +550,8 @@ if (event.httpMethod === "POST" && !params.cmd) {
           from: "post-body-cmd",
           forwarded: true,
           text,
-          aiHint: "baca data"
+          aiAuto: "baca data",
+          model: usedModel
         })
       };
     }
