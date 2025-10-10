@@ -478,7 +478,7 @@ async function runAITest(chatId) {
 }
 
 // ===== Konstanta Utama =====
-const GAS_MAIN_URL = "https://script.google.com/macros/s/AKfycbxyxYRrleVS8BA3pnt09QNpLCiZtLjdShnTvdTCLboJz0mDjTePFqcUl72oimJJxYgh/exec";
+const GAS_MAIN_URL = "https://script.google.com/macros/s/AKfycbw0PxWP8bjKa0vVcoZSoF1tjqCxLLJUVZSP_e9F-1r6TXkU8tM-a-kQQPQksCShiDzv/exec";
 
 // ===== Main handler =====
 exports.handler = async function (event) {
