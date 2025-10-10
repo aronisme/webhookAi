@@ -494,7 +494,7 @@ if (event.httpMethod === "POST" && !params.cmd) {
       const chatId = body.chatId || "1296836457";
       const text = body.cmd.trim();
 
-      // simpan ke memory
+      // simpan ke memory (pesan utama dari GAS)
       if (!userMemory[chatId]) userMemory[chatId] = [];
       userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
@@ -502,22 +502,29 @@ if (event.httpMethod === "POST" && !params.cmd) {
       // kirim langsung ke bot (tanpa AI)
       await sendMessage(chatId, text);
 
+      // tambahkan catatan internal ke memory AI
+      userMemory[chatId].push({ text: `AI-note: baca data`, timestamp: Date.now() });
+      userMemory[chatId] = summarizeContext(userMemory[chatId]);
+
       return {
         statusCode: 200,
         body: JSON.stringify({
           status: "ok",
           from: "post-body-cmd",
           forwarded: true,
-          text
+          text,
+          aiHint: "baca data"
         })
       };
     }
   } catch (err) {
     console.error("POST body trigger error:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Invalid POST body" }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Invalid POST body", detail: err.message })
+    };
   }
 }
-
 
     // ==== Validasi HTTP Method & Env ====
     if (event.httpMethod !== "POST")
