@@ -487,177 +487,37 @@ exports.handler = async function (event) {
     const params = event.queryStringParameters || {};
 
     // ==== 🔹 1a. HANDLE TRIGGER VIA POST BODY (cmd) dari GAS ====
-    if (event.httpMethod === "POST" && !params.cmd) {
-      try {
-        const body = JSON.parse(event.body || "{}");
-        if (body.cmd) {
-          const chatId = body.chatId || "1296836457";
-          const text = body.cmd.trim();
+if (event.httpMethod === "POST" && !params.cmd) {
+  try {
+    const body = JSON.parse(event.body || "{}");
+    if (body.cmd) {
+      const chatId = body.chatId || "1296836457";
+      const text = body.cmd.trim();
 
-          if (!userMemory[chatId]) userMemory[chatId] = [];
-          userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
-          userMemory[chatId] = summarizeContext(userMemory[chatId]);
-
-          await typing(chatId);
-
-          const { tanggal, jam, waktu } = getWIBTimeInfo();
-          const contextText = `
-Kamu adalah Ness, asisten pribadi dan Istri.
-Riwayat percakapan:
-${userMemory[chatId]
-  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
-  .join("\n")}
-Pesan terbaru: ${text}
-          `.trim();
-
-          let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-          let usedModel = null;
-
-          outerLoop: for (const model of models) {
-            for (let i = 0; i < apiKeys.length; i++) {
-              const apiKey = apiKeys[keyIndex];
-              keyIndex = (keyIndex + 1) % apiKeys.length;
-
-              try {
-                const payload = {
-                  model,
-                  messages: [
-                    { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
-                    { role: "user", content: contextText }
-                  ],
-                };
-
-                const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
-                  },
-                  body: JSON.stringify(payload),
-                });
-
-                const data = await resp.json();
-                if (data?.choices?.[0]?.message?.content) {
-                  reply = data.choices[0].message.content.trim();
-                  usedModel = model;
-                  break outerLoop;
-                }
-              } catch (err) {
-                console.error(`OpenRouter error [${model}]`, err.message);
-              }
-            }
-          }
-
-          if (usedModel) {
-            reply += `\n(${getAlias(usedModel)})`;
-          } else {
-            console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
-            const groqReply = await callGroq(contextText, tanggal, jam, waktu);
-            if (groqReply) {
-              reply = groqReply + "\n(Groq Fallback)";
-              usedModel = "groq";
-            } else {
-              reply = `${reply} (AI error total, semua fallback gagal)`;
-            }
-          }
-
-          userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-          userMemory[chatId] = summarizeContext(userMemory[chatId]);
-          await sendMessage(chatId, reply);
-
-          return {
-  statusCode: 200,
-  body: JSON.stringify({
-    status: "ok",
-    from: "post-body-cmd",
-    reply
-  })
-};
-        }
-      } catch (err) {
-        console.error("POST body trigger error:", err);
-        return { statusCode: 500, body: JSON.stringify({ error: "Invalid POST body" }) };
-      }
-    }
-
-    // ==== 🔹 1b. HANDLE TRIGGER VIA QUERY STRING (cmd) ====
-    if (params.cmd) {
-      const chatId = "1296836457";
-      const text = params.cmd.trim();
-
+      // simpan ke memory
       if (!userMemory[chatId]) userMemory[chatId] = [];
       userMemory[chatId].push({ text: `Ness: ${text}`, timestamp: Date.now() });
       userMemory[chatId] = summarizeContext(userMemory[chatId]);
 
-      await typing(chatId);
+      // kirim langsung ke bot (tanpa AI)
+      await sendMessage(chatId, text);
 
-      const { tanggal, jam, waktu } = getWIBTimeInfo();
-      const contextText = `
-Kamu adalah Ness, asisten pribadi dan Istri.
-Riwayat percakapan:
-${userMemory[chatId]
-  .map((m) => `${m.text} (${new Date(m.timestamp).toLocaleString("id-ID")})`)
-  .join("\n")}
-Pesan terbaru: ${text}
-      `.trim();
-
-      let reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-      let usedModel = null;
-
-      outerLoop: for (const model of models) {
-        for (let i = 0; i < apiKeys.length; i++) {
-          const apiKey = apiKeys[keyIndex];
-          keyIndex = (keyIndex + 1) % apiKeys.length;
-
-          try {
-            const payload = {
-              model,
-              messages: [
-                { role: "system", content: getSystemPrompt({ tanggal, jam, waktu }) },
-                { role: "user", content: contextText }
-              ],
-            };
-
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify(payload),
-            });
-
-            const data = await resp.json();
-            if (data?.choices?.[0]?.message?.content) {
-              reply = data.choices[0].message.content.trim();
-              usedModel = model;
-              break outerLoop;
-            }
-          } catch (err) {
-            console.error(`OpenRouter error [${model}]`, err.message);
-          }
-        }
-      }
-
-      if (usedModel) {
-        reply += `\n(${getAlias(usedModel)})`;
-      } else {
-        console.log("⚠️ Semua OpenRouter gagal, fallback ke Groq...");
-        const groqReply = await callGroq(contextText, tanggal, jam, waktu);
-        if (groqReply) {
-          reply = groqReply + "\n(Groq Fallback)";
-          usedModel = "groq";
-        } else {
-          reply = `${reply} (AI error total, semua fallback gagal)`;
-        }
-      }
-
-      userMemory[chatId].push({ text: `Ness: ${reply}`, timestamp: Date.now() });
-      userMemory[chatId] = summarizeContext(userMemory[chatId]);
-      await sendMessage(chatId, reply);
-
-      return { statusCode: 200, body: JSON.stringify({ status: "ok", from: "cmd" }) };
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          status: "ok",
+          from: "post-body-cmd",
+          forwarded: true,
+          text
+        })
+      };
     }
+  } catch (err) {
+    console.error("POST body trigger error:", err);
+    return { statusCode: 500, body: JSON.stringify({ error: "Invalid POST body" }) };
+  }
+}
+
 
     // ==== Validasi HTTP Method & Env ====
     if (event.httpMethod !== "POST")
