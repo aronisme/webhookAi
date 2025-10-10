@@ -565,7 +565,14 @@ Pesan terbaru: ${text}
           userMemory[chatId] = summarizeContext(userMemory[chatId]);
           await sendMessage(chatId, reply);
 
-          return { statusCode: 200, body: JSON.stringify({ status: "ok", from: "post-body-cmd" }) };
+          return {
+  statusCode: 200,
+  body: JSON.stringify({
+    status: "ok",
+    from: "post-body-cmd",
+    reply
+  })
+};
         }
       } catch (err) {
         console.error("POST body trigger error:", err);
